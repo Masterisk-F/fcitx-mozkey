@@ -1,3 +1,49 @@
+Mozc fork by koyasi777
+======================
+
+This repository is my personal fork of [google/mozc](https://github.com/google/mozc).
+
+このリポジトリは [google/mozc](https://github.com/google/mozc) の個人用フォークです。
+
+Main branches
+-------------
+
+- `my-product`: my main branch for daily use
+- `master`: upstream tracking branch
+- `pr/*`: upstream-oriented proposal branches
+
+主な追加機能（`my-product`）
+---------------------------
+
+- 曖昧なローマ字規則でも途中表示できるオプションを追加
+- ローマ字テーブル編集画面に、そのオプション用のチェックボックス UI を追加
+- 自分の Windows 開発環境向けのビルド調整
+
+Example
+-------
+
+With the custom option enabled:
+
+- `ms -> ます`
+- `mst -> ました`
+
+Typing `ms` shows `ます` in preedit, and then typing `t` updates the preedit to `ました`.
+
+このオプションを有効にすると、たとえば
+
+- `ms -> ます`
+- `mst -> ました`
+
+のような規則で、`ms` を入力した時点で `ます` を未変換表示し、続けて `t` を入力すると `ました` に更新されます。
+
+Note
+----
+
+This fork is primarily maintained for personal use.
+Upstream-oriented changes are organized in `pr/*` branches.
+
+以下は upstream の README です。
+
 [Mozc - a Japanese Input Method Editor designed for multi-platform](https://github.com/google/mozc)
 ===================================
 
@@ -9,13 +55,6 @@ OpenSource project originates from
 [Google Japanese Input](http://www.google.com/intl/ja/ime/).
 
 Mozc is not an officially supported Google product.
-
-Build Status
-------------
-
-| Linux | Windows | macOS | Android lib |
-|:-----:|:-------:|:-----:|:-----------:|
-| [![Linux](https://github.com/google/mozc/actions/workflows/linux.yaml/badge.svg)](https://github.com/google/mozc/actions/workflows/linux.yaml) | [![Windows](https://github.com/google/mozc/actions/workflows/windows.yaml/badge.svg)](https://github.com/google/mozc/actions/workflows/windows.yaml) | [![macOS](https://github.com/google/mozc/actions/workflows/macos.yaml/badge.svg)](https://github.com/google/mozc/actions/workflows/macos.yaml) | [![Android lib](https://github.com/google/mozc/actions/workflows/android.yaml/badge.svg)](https://github.com/google/mozc/actions/workflows/android.yaml) |
 
 
 What's Mozc?
