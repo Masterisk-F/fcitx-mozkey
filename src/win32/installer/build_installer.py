@@ -70,6 +70,38 @@ def exec_command(args: list[str], cwd: str) -> None:
     raise ChildProcessError('\n'.join(msgs))
 
 
+def find_redist_crt_dir(redist_root: pathlib.Path, arch: str) -> pathlib.Path:
+    arch_dir = redist_root.joinpath(arch).resolve()
+    required = (
+        'msvcp140.dll',
+        'msvcp140_1.dll',
+        'msvcp140_2.dll',
+        'vcruntime140.dll',
+        'vcruntime140_1.dll',
+    )
+
+    def is_valid_dir(path: pathlib.Path) -> bool:
+        return path.is_dir() and all(path.joinpath(name).exists() for name in required)
+
+    # まず標準的な Microsoft.VC*.CRT を直接見る
+    direct_candidates = sorted(
+        [p for p in arch_dir.glob('Microsoft.VC*.CRT') if is_valid_dir(p)],
+        key=lambda p: p.name,
+    )
+    if direct_candidates:
+        return direct_candidates[-1]
+
+    # 次に再帰的に探索して、実際に DLL が入っているディレクトリを拾う
+    for dll_name in ('msvcp140.dll', 'vcruntime140.dll'):
+        for match in arch_dir.rglob(dll_name):
+            candidate = match.parent
+            if is_valid_dir(candidate):
+                return candidate.resolve()
+
+    raise FileNotFoundError(
+        f'Could not find CRT redistributable directory containing {required} under: {arch_dir}'
+    )
+
 def run_wix4(args) -> None:
   """Run 'dotnet tool run wix build ...'.
 
@@ -78,13 +110,12 @@ def run_wix4(args) -> None:
   """
   arch = args.arch
 
-  # 'VCTOOLSREDISTDIR' environment variable is the same among x86, x64 and arm64
-  # architectures, so just using 'x64' should be fine here.
-  redist_root = pathlib.Path(
-      vs_util.get_vs_env_vars('x64')['VCTOOLSREDISTDIR']
+  # Temporary workaround for Visual Studio 2026.
+  redist_64bit = pathlib.Path(
+      r"C:\Program Files\Microsoft Visual Studio\18\Community\VC\Redist\MSVC\14.50.35710\x64\Microsoft.VC145.CRT"
   ).resolve()
+  print(f'Using CRT redist dir: {redist_64bit}')
 
-  redist_64bit = redist_root.joinpath(arch).joinpath('Microsoft.VC143.CRT')
   version_file = pathlib.Path(args.version_file).resolve()
   version = mozc_version.MozcVersion(version_file)
   credit_file = pathlib.Path(args.credit_file).resolve()

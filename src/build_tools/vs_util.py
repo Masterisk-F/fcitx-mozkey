@@ -86,7 +86,7 @@ def get_vcvarsall(
       '-find',
       'VC/Auxiliary/Build/vcvarsall.bat',
       '-version',
-      '[17,18)',  # See https://github.com/microsoft/vswhere/wiki/Versions
+      '[17,19)',  # See https://github.com/microsoft/vswhere/wiki/Versions
       '-latest',
       '-utf8',
   ]
