@@ -17,10 +17,15 @@ Main branches
 
 - 曖昧なローマ字規則でも途中表示できるオプションを追加
 - ローマ字テーブル編集画面に、そのオプション用のチェックボックス UI を追加
+- 句読点・記号を単打で確定できるオプションを追加
+- 単打確定の対象を設定画面のチェックボックスで選択可能
+- 句読点変換と句読点・記号の単打確定は排他的に動作
 - 自分の Windows 開発環境向けのビルド調整
 
-Example
--------
+Examples
+--------
+
+### Ambiguous romaji display
 
 With the custom option enabled:
 
@@ -35,6 +40,30 @@ Typing `ms` shows `ます` in preedit, and then typing `t` updates the preedit t
 - `mst -> ました`
 
 のような規則で、`ms` を入力した時点で `ます` を未変換表示し、続けて `t` を入力すると `ました` に更新されます。
+
+### Direct commit for punctuations/symbols
+
+With the direct-commit option enabled, configured punctuations/symbols are committed immediately.
+
+Examples:
+
+- `tesuto.` → `てすと。`
+- `tesuto?` → `てすと？`
+- `kakko(` → `かっこ（`
+
+You can choose which punctuations/symbols are committed directly in the config dialog.
+
+句読点・記号の単打確定オプションを有効にすると、設定した記号を入力した時点で未確定文字列全体をそのまま確定できます。
+
+たとえば
+
+- `tesuto.` → `てすと。`
+- `tesuto?` → `てすと？`
+- `kakko(` → `かっこ（`
+
+のように動作します。
+
+どの句読点・記号を単打確定の対象にするかは、設定画面のチェックボックスで選択できます。
 
 Note
 ----
