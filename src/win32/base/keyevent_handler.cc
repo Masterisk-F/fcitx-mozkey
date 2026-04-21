@@ -352,6 +352,18 @@ void ClearModifyerKeyIfNeeded(const KeyEvent* key,
   }
 }
 
+BYTE GetPhysicalVirtualKey(const VirtualKey& virtual_key, BYTE scan_code) {
+  if (virtual_key.virtual_key() == VK_SHIFT) {
+    const UINT physical_virtual_key =
+        ::MapVirtualKeyW(static_cast<UINT>(scan_code), MAPVK_VSC_TO_VK_EX);
+    if (physical_virtual_key == VK_LSHIFT ||
+        physical_virtual_key == VK_RSHIFT) {
+      return static_cast<BYTE>(physical_virtual_key);
+    }
+  }
+  return virtual_key.virtual_key();
+}
+
 // See b/2576120 for details.
 bool IsNotimplementedKey(const VirtualKey& virtual_key) {
   switch (virtual_key.virtual_key()) {
@@ -418,16 +430,21 @@ bool ConvertToKeyEventMain(const VirtualKey& virtual_key, BYTE scan_code,
     return true;
   }
 
-  // TODO(yukawa): Distinguish left key from right key to fix b/2674446.
+  const BYTE physical_virtual_key =
+      GetPhysicalVirtualKey(virtual_key, scan_code);
+
   if (keyboard_status.IsPressed(VK_SHIFT)) {
     modifer_keys->insert(KeyEvent::SHIFT);
   }
+
   if (keyboard_status.IsPressed(VK_CONTROL)) {
     modifer_keys->insert(KeyEvent::CTRL);
   }
+
   if (keyboard_status.IsPressed(VK_MENU)) {
     modifer_keys->insert(KeyEvent::ALT);
   }
+
   if (keyboard_status.IsPressed(VK_CAPITAL)) {
     modifer_keys->insert(KeyEvent::CAPS);
   }
@@ -451,12 +468,25 @@ bool ConvertToKeyEventMain(const VirtualKey& virtual_key, BYTE scan_code,
     case VK_SHIFT:
       modifer_keys->insert(KeyEvent::SHIFT);
       return true;
+
+    case VK_LSHIFT:
+      modifer_keys->insert(KeyEvent::SHIFT);
+      modifer_keys->insert(KeyEvent::LEFT_SHIFT);
+      return true;
+
+    case VK_RSHIFT:
+      modifer_keys->insert(KeyEvent::SHIFT);
+      modifer_keys->insert(KeyEvent::RIGHT_SHIFT);
+      return true;
+
     case VK_CONTROL:
       modifer_keys->insert(KeyEvent::CTRL);
       return true;
+
     case VK_MENU:
       modifer_keys->insert(KeyEvent::ALT);
       return true;
+
     case VK_CAPITAL:
       modifer_keys->insert(KeyEvent::CAPS);
       return true;
@@ -725,8 +755,13 @@ KeyEventHandlerResult KeyEventHandler::HandleKey(
   key->set_activated(ime_state.open);
   key->set_mode(mozc_mode);
 
-  switch (virtual_key.virtual_key()) {
+  const BYTE physical_virtual_key =
+      GetPhysicalVirtualKey(virtual_key, scan_code);
+
+  switch (physical_virtual_key) {
     case VK_SHIFT:
+    case VK_LSHIFT:
+    case VK_RSHIFT:
     case VK_CONTROL:
     case VK_MENU:
       if (is_key_down) {
@@ -736,13 +771,15 @@ KeyEventHandlerResult KeyEventHandler::HandleKey(
         result.should_be_sent_to_server = false;
         return result;
       }
-      if (ime_state.last_down_key.virtual_key() != virtual_key.virtual_key()) {
+
+      if (ime_state.last_down_key.virtual_key() != physical_virtual_key) {
         // Will not eat this message.
         result.succeeded = true;
         result.should_be_eaten = false;
         result.should_be_sent_to_server = false;
         return result;
       }
+
       // We will send this message to the server.
       result.succeeded = true;
       result.should_be_eaten = true;
@@ -819,7 +856,9 @@ KeyEventHandlerResult KeyEventHandler::ImeProcessKey(
     // key sequence to generate appropriate key messages as expected by the
     // server.  Strictly speaking, the Mozc client is actually stateful in
     // this sense.
-    next_state->last_down_key = virtual_key;
+    next_state->last_down_key =
+        VirtualKey::FromVirtualKey(
+            GetPhysicalVirtualKey(virtual_key, scan_code));
   }
 
   KeyEvent key;
@@ -909,7 +948,9 @@ KeyEventHandlerResult KeyEventHandler::ImeToAsciiEx(
     // key sequence to generate appropriate key messages as expected by the
     // server.  Strictly speaking, the Mozc client is actually stateful in
     // this sense.
-    next_state->last_down_key = virtual_key;
+    next_state->last_down_key =
+        VirtualKey::FromVirtualKey(
+            GetPhysicalVirtualKey(virtual_key, scan_code));
   }
 
   KeyEvent key;
