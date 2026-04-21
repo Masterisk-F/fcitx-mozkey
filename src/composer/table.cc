@@ -446,6 +446,8 @@ TableAttributes ParseAttributes(const absl::string_view input) {
       attributes |= DIRECT_INPUT;
     } else if (attribute_string == "EndChunk") {
       attributes |= END_CHUNK;
+    } else if (attribute_string == "DisplayAmbiguousResult") {
+      attributes |= DISPLAY_AMBIGUOUS_RESULT;
     }
   }
   return attributes;
