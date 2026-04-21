@@ -163,6 +163,45 @@ TEST(CharChunkTest, AddInput_ForN) {
   EXPECT_THAT(result, RestIsEmpty());
 }
 
+TEST(CharChunkTest, AddInput_DisplayAmbiguousResult) {
+  auto table = std::make_shared<Table>();
+  table->AddRuleWithAttributes("ms", "[MASU]", "",
+                               DISPLAY_AMBIGUOUS_RESULT);
+  table->AddRule("mst", "[MASHITA]", "");
+
+  CharChunk chunk(Transliterators::CONVERSION_STRING, table);
+
+  std::pair<bool, absl::string_view> result = chunk.AddInputInternal("m");
+  EXPECT_THAT(result, NoLoop());
+
+  result = chunk.AddInputInternal("s");
+  EXPECT_THAT(result, NoLoop());
+  EXPECT_FALSE(chunk.IsFixed());
+  EXPECT_EQ(chunk.raw(), "ms");
+  EXPECT_EQ(chunk.conversion(), "");
+  EXPECT_EQ(chunk.pending(), "ms");
+  EXPECT_EQ(chunk.ambiguous(), "[MASU]");
+
+  std::string preedit;
+  chunk.AppendResult(Transliterators::CONVERSION_STRING, &preedit);
+  EXPECT_EQ(preedit, "[MASU]");
+
+  std::string fixed;
+  chunk.AppendFixedResult(Transliterators::CONVERSION_STRING, &fixed);
+  EXPECT_EQ(fixed, "[MASU]");
+
+  result = chunk.AddInputInternal("t");
+  EXPECT_THAT(result, NoLoop());
+  EXPECT_TRUE(chunk.IsFixed());
+  EXPECT_EQ(chunk.raw(), "mst");
+  EXPECT_EQ(chunk.conversion(), "[MASHITA]");
+  EXPECT_EQ(chunk.pending(), "");
+
+  preedit.clear();
+  chunk.AppendResult(Transliterators::CONVERSION_STRING, &preedit);
+  EXPECT_EQ(preedit, "[MASHITA]");
+}
+
 TEST(CharChunkTest, AddInput_WithString) {
   // Test against http://b/1547858
   auto table = std::make_shared<Table>();

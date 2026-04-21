@@ -67,6 +67,9 @@ enum TableAttribute {
   // This flag treats the next typing as a new input.  This flag is
   // used with the NEW_CHUNK flag.
   END_CHUNK = 8,
+
+  // This flag allows an ambiguous rule result to be shown in preedit.
+  DISPLAY_AMBIGUOUS_RESULT = 16,
 };
 typedef uint32_t TableAttributes;
 

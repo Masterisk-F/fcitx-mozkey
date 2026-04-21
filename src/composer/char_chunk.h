@@ -180,9 +180,11 @@ class CharChunk final {
 
   friend bool operator==(const CharChunk& lhs, const CharChunk& rhs) {
     return std::tie(lhs.table_, lhs.raw_, lhs.conversion_, lhs.pending_,
-                    lhs.ambiguous_, lhs.transliterator_, lhs.attributes_) ==
+                    lhs.ambiguous_, lhs.display_ambiguous_as_result_,
+                    lhs.transliterator_, lhs.attributes_) ==
            std::tie(rhs.table_, rhs.raw_, rhs.conversion_, rhs.pending_,
-                    rhs.ambiguous_, rhs.transliterator_, rhs.attributes_);
+                    rhs.ambiguous_, rhs.display_ambiguous_as_result_,
+                    rhs.transliterator_, rhs.attributes_);
   }
 
   friend bool operator!=(const CharChunk& lhs, const CharChunk& rhs) {
@@ -193,9 +195,11 @@ class CharChunk final {
   friend void AbslStringify(Sink& sink, const CharChunk& chunk) {
     absl::Format(&sink,
                  "table = %p, raw = %s, conversion = %s, pending = %s, "
-                 "ambiguous = %s, transliterator = %v, attributes = %v",
+                 "ambiguous = %s, display_ambiguous_as_result = %v, "
+                 "transliterator = %v, attributes = %v",
                  chunk.table_.get(), chunk.raw_, chunk.conversion_,
-                 chunk.pending_, chunk.ambiguous_, chunk.transliterator_,
+                 chunk.pending_, chunk.ambiguous_,
+                 chunk.display_ambiguous_as_result_, chunk.transliterator_,
                  chunk.attributes_);
   }
 
@@ -205,6 +209,7 @@ class CharChunk final {
 
  private:
   void AddInputAndConvertedChar(CompositionInput* composition_input);
+  std::string GetDisplayConverted() const;
 
   std::shared_ptr<const Table> table_;
 
@@ -236,6 +241,7 @@ class CharChunk final {
   // However it can be converted to "な", if the next input is "a".
   // In this case, "ん" is stored to `ambiguous_` instead of `conversion_`.
   std::string ambiguous_;
+  bool display_ambiguous_as_result_ = false;
   Transliterators::Transliterator transliterator_;
   TableAttributes attributes_ = NO_TABLE_ATTRIBUTE;
   // for thread safety.

@@ -128,7 +128,15 @@ void CharChunk::Clear() {
   conversion_.clear();
   pending_.clear();
   ambiguous_.clear();
+  display_ambiguous_as_result_ = false;
   local_length_cache_ = std::string::npos;
+}
+
+std::string CharChunk::GetDisplayConverted() const {
+  if (display_ambiguous_as_result_ && !ambiguous_.empty()) {
+    return absl::StrCat(conversion_, ambiguous_);
+  }
+  return absl::StrCat(conversion_, pending_);
 }
 
 size_t CharChunk::GetLength(Transliterators::Transliterator t12r) const {
@@ -136,8 +144,10 @@ size_t CharChunk::GetLength(Transliterators::Transliterator t12r) const {
       local_length_cache_ != std::string::npos) {
     return local_length_cache_;
   }
-  const std::string t13n = Transliterate(
-      t12r, DeleteSpecialKeys(raw_), DeleteSpecialKeys(conversion_ + pending_));
+
+  const std::string t13n =
+      Transliterate(t12r, DeleteSpecialKeys(raw_),
+                    DeleteSpecialKeys(GetDisplayConverted()));
   size_t length = Util::CharsLen(t13n);
   if (t12r == Transliterators::LOCAL) {
     local_length_cache_ = length;
@@ -149,7 +159,7 @@ void CharChunk::AppendResult(Transliterators::Transliterator t12r,
                              std::string* result) const {
   const std::string t13n =
       Transliterate(t12r, DeleteSpecialKeys(raw_),
-                    DeleteSpecialKeys(absl::StrCat(conversion_, pending_)));
+                    DeleteSpecialKeys(GetDisplayConverted()));
   result->append(t13n);
 }
 
@@ -365,6 +375,7 @@ std::pair<bool, absl::string_view> CharChunk::AddInputInternal(
     absl::StrAppend(&raw_, used_input_chars);
     absl::StrAppend(&pending_, used_input_chars);
     ambiguous_.clear();
+    display_ambiguous_as_result_ = false;
     return {kNoLoop, input.substr(used_input_length)};
   }
 
@@ -391,11 +402,14 @@ std::pair<bool, absl::string_view> CharChunk::AddInputInternal(
     conversion_.append(entry->result());
     pending_ = entry->pending();
     ambiguous_.clear();
+    display_ambiguous_as_result_ = false;
   } else {
     // A result was found, but it is still ambiguous.
     // e.g. "n" with "n->ん and na->な".
     pending_ = key;
     ambiguous_ = entry->result();
+    display_ambiguous_as_result_ =
+        (entry->attributes() & DISPLAY_AMBIGUOUS_RESULT);
   }
 
   // If the lookup is deterministically done (e.g. fixed is true and input is
