@@ -20,6 +20,7 @@ Main branches
 - 句読点・記号を単打で確定できるオプションを追加
 - 単打確定の対象を設定画面のチェックボックスで選択可能
 - 句読点変換と句読点・記号の単打確定は排他的に動作
+- Windows 版で左 Shift / 右 Shift を個別キーとして設定画面から割り当て可能
 - 自分の Windows 開発環境向けのビルド調整
 
 Examples
@@ -64,6 +65,30 @@ You can choose which punctuations/symbols are committed directly in the config d
 のように動作します。
 
 どの句読点・記号を単打確定の対象にするかは、設定画面のチェックボックスで選択できます。
+
+### Independent left/right Shift key bindings (Windows)
+
+On Windows, left Shift and right Shift can be configured as separate keys in the keybinding editor.
+
+For example:
+
+- `DirectInput + RightShift -> IMEOn`
+- `Precomposition + LeftShift -> IMEOff`
+- `Composition + LeftShift -> IMEOff`
+- `Conversion + LeftShift -> IMEOff`
+
+This allows assigning different IME actions to the left and right Shift keys.
+
+Windows 版では、キー設定エディタ上で左 Shift と右 Shift を別々のキーとして扱えます。
+
+たとえば
+
+- `DirectInput + RightShift -> IMEOn`
+- `Precomposition + LeftShift -> IMEOff`
+- `Composition + LeftShift -> IMEOff`
+- `Conversion + LeftShift -> IMEOff`
+
+のように設定でき、左右の Shift に別々の IME 操作を割り当てられます。
 
 Note
 ----
