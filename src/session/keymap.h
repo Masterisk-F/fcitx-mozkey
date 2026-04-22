@@ -370,11 +370,32 @@ class KeyMapManager {
 template <typename T>
 bool KeyMap<T>::GetCommand(const commands::KeyEvent& key_event,
                            CommandsType* command) const {
+  KeyInformation key;
+
+  // First, try exact match without normalization so that explicit
+  // LeftShift / RightShift bindings can work.
+  if (KeyEventUtil::GetKeyInformation(key_event, &key)) {
+    if (const auto it = keymap_.find(key); it != keymap_.end()) {
+      *command = it->second;
+      return true;
+    }
+
+    if (KeyEventUtil::MaybeGetKeyStub(key_event, &key)) {
+      const auto it = keymap_.find(key);
+      if (it != keymap_.end()) {
+        *command = it->second;
+        return true;
+      }
+    }
+  }
+
+  // Fallback to normalized match so that existing generic shortcuts
+  // such as Shift Space keep working as before.
   // Shortcut keys should be available as if CapsLock was not enabled like
   // other IMEs such as MS-IME or ATOK. b/5627459
   commands::KeyEvent normalized_key_event;
   KeyEventUtil::NormalizeModifiers(key_event, &normalized_key_event);
-  KeyInformation key;
+
   if (!KeyEventUtil::GetKeyInformation(normalized_key_event, &key)) {
     return false;
   }

@@ -151,6 +151,32 @@ constexpr auto kWinVirtualKeyModifierNonRequiredTable = CreateFlatMap<
 });
 #endif  // _WIN32
 
+#ifdef _WIN32
+constexpr quint32 kLeftShiftScanCode = 0x2A;
+constexpr quint32 kRightShiftScanCode = 0x36;
+
+QString GetShiftKeyName(const QKeyEvent &key_event) {
+  const quint32 scan_code = key_event.nativeScanCode() & 0xFF;
+  switch (scan_code) {
+    case kLeftShiftScanCode:
+      return QStringLiteral("LeftShift");
+    case kRightShiftScanCode:
+      return QStringLiteral("RightShift");
+    default:
+      break;
+  }
+
+  const DWORD virtual_key = key_event.nativeVirtualKey();
+  if (virtual_key == VK_LSHIFT) {
+    return QStringLiteral("LeftShift");
+  }
+  if (virtual_key == VK_RSHIFT) {
+    return QStringLiteral("RightShift");
+  }
+  return QString();
+}
+#endif  // _WIN32
+
 // On Windows Hiragana/Eisu keys only emits KEY_DOWN event.
 // for these keys we don't handle auto-key repeat.
 bool IsDownOnlyKey(const QKeyEvent &key_event) {
@@ -173,6 +199,7 @@ KeyBindingFilter::KeyBindingFilter(QLineEdit *line_edit, QPushButton *ok_button)
       ctrl_pressed_(false),
       alt_pressed_(false),
       shift_pressed_(false),
+      shift_key_name_(),
       line_edit_(line_edit),
       ok_button_(ok_button) {
   Reset();
@@ -182,6 +209,7 @@ void KeyBindingFilter::Reset() {
   ctrl_pressed_ = false;
   alt_pressed_ = false;
   shift_pressed_ = false;
+  shift_key_name_.clear();
   modifier_required_key_.clear();
   modifier_non_required_key_.clear();
   unknown_key_.clear();
@@ -213,7 +241,11 @@ KeyBindingFilter::KeyState KeyBindingFilter::Encode(QString *result) const {
   }
 
   if (shift_pressed_) {
-    results << QStringLiteral("Shift");
+    if (!shift_key_name_.isEmpty()) {
+      results << shift_key_name_;
+    } else {
+      results << QStringLiteral("Shift");
+    }
   }
 
   if (alt_pressed_) {
@@ -263,13 +295,17 @@ KeyBindingFilter::KeyState KeyBindingFilter::Encode(QString *result) const {
   // to get the original key "3" from "#" only with Qt layer.
   // need to see platform dependent scan code here.
 
-  // Don't support Shift only
-  // Shift in composition is set to EDIT_INSERT by default.
-  // Now we do not make the keybindings for EDIT_INSERT configurable.
-  // For avoiding complexity, we do not support Shift here.
-  if (shift_pressed_ && !ctrl_pressed_ && !alt_pressed_ &&
-      modifier_required_key_.isEmpty() &&
-      modifier_non_required_key_.isEmpty()) {
+  const bool shift_only = shift_pressed_ && !ctrl_pressed_ && !alt_pressed_ &&
+                          modifier_required_key_.isEmpty() &&
+                          modifier_non_required_key_.isEmpty();
+
+  const bool is_explicit_left_or_right_shift =
+      (shift_key_name_ == QLatin1String("LeftShift") ||
+       shift_key_name_ == QLatin1String("RightShift"));
+
+  // Keep rejecting generic "Shift" only, but allow explicit
+  // "LeftShift" / "RightShift" only.
+  if (shift_only && !is_explicit_left_or_right_shift) {
     result_state = KeyBindingFilter::DENY_KEY;
   }
 
@@ -313,6 +349,10 @@ KeyBindingFilter::KeyState KeyBindingFilter::AddKey(const QKeyEvent &key_event,
 
   const int qt_key = key_event.key();
 
+#ifdef _WIN32
+  const DWORD virtual_key = key_event.nativeVirtualKey();
+#endif  // _WIN32
+
   // modifier keys
   switch (qt_key) {
 #ifdef __APPLE__
@@ -334,6 +374,11 @@ KeyBindingFilter::KeyState KeyBindingFilter::AddKey(const QKeyEvent &key_event,
 #endif  // __APPLE__
     case Qt::Key_Shift:
       shift_pressed_ = true;
+#ifdef _WIN32
+      shift_key_name_ = GetShiftKeyName(key_event);
+#else   // _WIN32
+      shift_key_name_.clear();
+#endif  // _WIN32
       return Encode(result);
     default:
       break;
@@ -349,7 +394,6 @@ KeyBindingFilter::KeyState KeyBindingFilter::AddKey(const QKeyEvent &key_event,
 
 #ifdef _WIN32
   // Handle JP109's Muhenkan/Henkan/katakana-hiragana and Zenkaku/Hankaku
-  const DWORD virtual_key = key_event.nativeVirtualKey();
   if (const absl::string_view *key =
           kWinVirtualKeyModifierNonRequiredTable.FindOrNull(virtual_key);
       key != nullptr) {

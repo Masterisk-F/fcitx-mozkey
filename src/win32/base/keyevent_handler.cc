@@ -464,7 +464,7 @@ bool ConvertToKeyEventMain(const VirtualKey& virtual_key, BYTE scan_code,
   // Modifier keys should be handled.
   // Due to the anomaly of Mozc protocol, |modifer_keys| should be set even
   // when this is the key-up message of the modifier key.
-  switch (virtual_key.virtual_key()) {
+  switch (physical_virtual_key) {
     case VK_SHIFT:
       modifer_keys->insert(KeyEvent::SHIFT);
       return true;
