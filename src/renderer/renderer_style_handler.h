@@ -46,6 +46,10 @@ class RendererStyleHandler {
   static bool SetRendererStyle(const RendererStyle& style);
   // get default Style
   static void GetDefaultRendererStyle(RendererStyle* style);
+
+  // Applies candidate window theme options to the given style.
+  static void ApplyCandidateWindowTheme(bool use_dark_mode,
+                                        RendererStyle* style);
 };
 
 }  // namespace renderer

@@ -260,6 +260,11 @@
         <translation>カーソル周辺に入力モードを表示する</translation>
     </message>
     <message>
+        <location filename="config_dialog.ui" line="817"/>
+        <source>Use dark mode for candidate window</source>
+        <translation>候補ウィンドウをダークモードにする</translation>
+    </message>
+    <message>
         <location filename="config_dialog.ui" line="809"/>
         <source>Suggest</source>
         <translation>サジェスト</translation>
@@ -640,6 +645,11 @@
         <location filename="config_dialog.cc" line="399"/>
         <source>Input mode indicator setting is enabled from new applications.</source>
         <translation>入力モード表示の設定は新しいアプリケーションから有効になります。</translation>
+    </message>
+    <message>
+        <location filename="config_dialog.cc" line="406"/>
+        <source>Candidate window dark mode setting is enabled from new applications.</source>
+        <translation>候補ウィンドウのダークモード設定は新しいアプリケーションから有効になります。</translation>
     </message>
     <message>
         <location filename="config_dialog.cc" line="732"/>

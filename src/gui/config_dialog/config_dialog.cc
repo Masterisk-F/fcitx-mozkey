@@ -89,7 +89,8 @@ ConfigDialog::ConfigDialog()
     : client_(client::ClientFactory::NewClient()),
       initial_preedit_method_(0),
       initial_use_keyboard_to_change_preedit_method_(false),
-      initial_use_mode_indicator_(true) {
+      initial_use_mode_indicator_(true),
+      initial_use_dark_mode_candidate_window_(false) {
   setupUi(this);
   setWindowFlags(Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint);
   setWindowModality(Qt::NonModal);
@@ -190,6 +191,9 @@ ConfigDialog::ConfigDialog()
 #ifndef _WIN32
   // Mode indicator is available only on Windows.
   useModeIndicator->hide();
+
+  // Candidate window dark mode is available only on Windows.
+  useDarkModeCandidateWindow->hide();
 #endif  // !_WIN32
 
   // Reset texts explicitly for translations.
@@ -351,6 +355,8 @@ void ConfigDialog::Reload() {
   initial_use_keyboard_to_change_preedit_method_ =
       config.use_keyboard_to_change_preedit_method();
   initial_use_mode_indicator_ = config.use_mode_indicator();
+  initial_use_dark_mode_candidate_window_ =
+      config.use_dark_mode_candidate_window();
 }
 
 bool ConfigDialog::Update() {
@@ -366,10 +372,25 @@ bool ConfigDialog::Update() {
     return false;
   }
 
-#if defined(_WIN32)
-  if ((initial_preedit_method_ != static_cast<int>(config.preedit_method())) ||
+  const bool preedit_setting_changed =
+      (initial_preedit_method_ != static_cast<int>(config.preedit_method())) ||
       (initial_use_keyboard_to_change_preedit_method_ !=
-       config.use_keyboard_to_change_preedit_method())) {
+       config.use_keyboard_to_change_preedit_method());
+
+  const bool use_mode_indicator_changed =
+      (initial_use_mode_indicator_ != config.use_mode_indicator());
+
+  const bool use_dark_mode_candidate_window_changed =
+      (initial_use_dark_mode_candidate_window_ !=
+       config.use_dark_mode_candidate_window());
+
+  if (!SetConfig(config)) {
+    QMessageBox::critical(this, windowTitle(), tr("Failed to update config"));
+    return false;
+  }
+
+#if defined(_WIN32)
+  if (preedit_setting_changed) {
     QMessageBox::information(this, windowTitle(),
                              tr("Romaji/Kana setting is enabled from"
                                 " new applications."));
@@ -380,17 +401,22 @@ bool ConfigDialog::Update() {
 #endif  // _WIN32
 
 #ifdef _WIN32
-  if (initial_use_mode_indicator_ != config.use_mode_indicator()) {
+  if (use_mode_indicator_changed) {
     QMessageBox::information(this, windowTitle(),
                              tr("Input mode indicator setting is enabled from"
                                 " new applications."));
     initial_use_mode_indicator_ = config.use_mode_indicator();
   }
-#endif  // _WIN32
 
-  if (!SetConfig(config)) {
-    QMessageBox::critical(this, windowTitle(), tr("Failed to update config"));
+  if (use_dark_mode_candidate_window_changed) {
+    QMessageBox::information(
+        this, windowTitle(),
+        tr("Candidate window dark mode setting is enabled from"
+           " new applications."));
+    initial_use_dark_mode_candidate_window_ =
+        config.use_dark_mode_candidate_window();
   }
+#endif  // _WIN32
 
 #ifdef _WIN32
   if (!WinUtil::SetIMEHotKeyDisabled(IMEHotKeyDisabledCheckBox->isChecked())) {
@@ -573,6 +599,8 @@ void ConfigDialog::ConvertFromProto(const config::Config &config) {
 
   SET_CHECKBOX(useModeIndicator, use_mode_indicator);
 
+  SET_CHECKBOX(useDarkModeCandidateWindow, use_dark_mode_candidate_window);
+
   // tab4
   SET_CHECKBOX(historySuggestCheckBox, use_history_suggest);
   SET_CHECKBOX(dictionarySuggestCheckBox, use_dictionary_suggest);
@@ -647,6 +675,8 @@ void ConfigDialog::ConvertToProto(config::Config *config) const {
   GET_CHECKBOX(useJapaneseLayout, use_japanese_layout);
 
   GET_CHECKBOX(useModeIndicator, use_mode_indicator);
+
+  GET_CHECKBOX(useDarkModeCandidateWindow, use_dark_mode_candidate_window);
 
   uint32_t auto_conversion_key = 0;
   if (kutenCheckBox->isChecked()) {

@@ -51,6 +51,7 @@
 #include "protocol/config.pb.h"
 #include "protocol/renderer_command.pb.h"
 #include "renderer/renderer_interface.h"
+#include "renderer/renderer_style_handler.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -87,6 +88,17 @@ std::string ConstructServiceName(bool for_testing) {
     absl::StrAppend(&name, ".", desktop_name);
   }
   return name;
+}
+
+void UpdateRendererStyleFromConfig() {
+  config::ConfigHandler::Reload();
+
+  RendererStyle style;
+  RendererStyleHandler::GetDefaultRendererStyle(&style);
+  RendererStyleHandler::ApplyCandidateWindowTheme(
+      config::ConfigHandler::GetSharedConfig()->use_dark_mode_candidate_window(),
+      &style);
+  RendererStyleHandler::SetRendererStyle(style);
 }
 
 }  // namespace
@@ -172,6 +184,8 @@ RendererServer::RendererServer(bool for_testing)
   mozc::internal::SetConfigVLogLevel(
       config::ConfigHandler::GetSharedConfig()->verbose_level());
 #endif  // NDEBUG
+
+  UpdateRendererStyleFromConfig();
 }
 
 RendererServer::~RendererServer() = default;
@@ -221,6 +235,8 @@ bool RendererServer::ExecCommandInternal(
 
   // Check process info if update mode
   if (command.type() == commands::RendererCommand::UPDATE) {
+    UpdateRendererStyleFromConfig();
+
     // set HWND of message-only window
     if (command.has_application_info() &&
         command.application_info().has_receiver_handle()) {

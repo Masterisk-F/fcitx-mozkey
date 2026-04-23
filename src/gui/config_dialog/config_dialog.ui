@@ -960,6 +960,16 @@
          </property>
         </widget>
        </item>
+       <item row="7" column="0" colspan="8">
+        <widget class="QCheckBox" name="useDarkModeCandidateWindow">
+         <property name="enabled">
+          <bool>true</bool>
+         </property>
+         <property name="text">
+          <string>Use dark mode for candidate window</string>
+         </property>
+        </widget>
+       </item>
       </layout>
      </widget>
     </widget>
@@ -1965,6 +1975,8 @@
   <tabstop>directCommitCloseBracketCheckBox</tabstop>
   <tabstop>shiftKeyModeSwitchComboBox</tabstop>
   <tabstop>useJapaneseLayout</tabstop>
+  <tabstop>useModeIndicator</tabstop>
+  <tabstop>useDarkModeCandidateWindow</tabstop>
   <tabstop>characterFormEditor</tabstop>
   <tabstop>historySuggestCheckBox</tabstop>
   <tabstop>clearUnusedUserPredictionButton</tabstop>
