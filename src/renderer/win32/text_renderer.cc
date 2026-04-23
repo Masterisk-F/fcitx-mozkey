@@ -62,104 +62,153 @@ using ::mozc::renderer::RendererStyle;
 
 namespace {
 
-CRect ToCRect(const Rect& rect) {
-  return CRect(rect.Left(), rect.Top(), rect.Right(), rect.Bottom());
-}
+  constexpr size_t kShortcutTextStyleIndex = 0;
+  constexpr size_t kCandidateTextStyleIndex = 2;
+  constexpr size_t kDescriptionTextStyleIndex = 3;
 
-COLORREF GetTextColor(TextRenderer::FONT_TYPE type) {
-  switch (type) {
-    case TextRenderer::FONTSET_SHORTCUT:
-      return RGB(0x61, 0x61, 0x61);
-    case TextRenderer::FONTSET_CANDIDATE:
-      return RGB(0x00, 0x00, 0x00);
-    case TextRenderer::FONTSET_DESCRIPTION:
-      return RGB(0x88, 0x88, 0x88);
-    case TextRenderer::FONTSET_FOOTER_INDEX:
-      return RGB(0x4c, 0x4c, 0x4c);
-    case TextRenderer::FONTSET_FOOTER_LABEL:
-      return RGB(0x4c, 0x4c, 0x4c);
-    case TextRenderer::FONTSET_FOOTER_SUBLABEL:
-      return RGB(0xA7, 0xA7, 0xA7);
-    default:
-      break;
+  CRect ToCRect(const Rect& rect) {
+    return CRect(rect.Left(), rect.Top(), rect.Right(), rect.Bottom());
   }
 
-  // TODO(horo): Not only infolist fonts but also candidate fonts
-  //             should be created from RendererStyle
-  RendererStyle style;
-  GetScaledRendererStyle(&style);
-  const auto& infostyle = style.infolist_style();
-  switch (type) {
-    case TextRenderer::FONTSET_INFOLIST_CAPTION:
-      return RGB(infostyle.caption_style().foreground_color().r(),
-                 infostyle.caption_style().foreground_color().g(),
-                 infostyle.caption_style().foreground_color().b());
-    case TextRenderer::FONTSET_INFOLIST_TITLE:
-      return RGB(infostyle.title_style().foreground_color().r(),
-                 infostyle.title_style().foreground_color().g(),
-                 infostyle.title_style().foreground_color().b());
-    case TextRenderer::FONTSET_INFOLIST_DESCRIPTION:
-      return RGB(infostyle.description_style().foreground_color().r(),
-                 infostyle.description_style().foreground_color().g(),
-                 infostyle.description_style().foreground_color().b());
-    default:
-      break;
+  COLORREF ToColorRef(const RendererStyle::RGBAColor& color) {
+    return RGB(static_cast<int>(color.r()), static_cast<int>(color.g()),
+               static_cast<int>(color.b()));
   }
 
-  LOG(DFATAL) << "Unknown type: " << type;
-  return RGB(0, 0, 0);
-}
+  COLORREF GetTextColor(TextRenderer::FONT_TYPE type) {
+    RendererStyle style;
+    GetScaledRendererStyle(&style);
 
-LOGFONT GetLogFont(TextRenderer::FONT_TYPE type) {
-  LOGFONT font = GetMessageBoxLogFont();
+    switch (type) {
+      case TextRenderer::FONTSET_SHORTCUT:
+        if (style.text_styles_size() > kShortcutTextStyleIndex) {
+          return ToColorRef(
+              style.text_styles(kShortcutTextStyleIndex).foreground_color());
+        }
+        return RGB(0x61, 0x61, 0x61);
 
-  switch (type) {
-    case TextRenderer::FONTSET_SHORTCUT: {
-      font.lfHeight += (font.lfHeight > 0 ? 3 : -3);
-      font.lfWeight = FW_BOLD;
-      return font;
+      case TextRenderer::FONTSET_CANDIDATE:
+        if (style.text_styles_size() > kCandidateTextStyleIndex) {
+          return ToColorRef(
+              style.text_styles(kCandidateTextStyleIndex).foreground_color());
+        }
+        return RGB(0x00, 0x00, 0x00);
+
+      case TextRenderer::FONTSET_DESCRIPTION:
+        if (style.text_styles_size() > kDescriptionTextStyleIndex) {
+          return ToColorRef(
+              style.text_styles(kDescriptionTextStyleIndex).foreground_color());
+        }
+        return RGB(0x88, 0x88, 0x88);
+
+      case TextRenderer::FONTSET_FOOTER_INDEX:
+      case TextRenderer::FONTSET_FOOTER_LABEL:
+        return ToColorRef(style.footer_style().foreground_color());
+
+      case TextRenderer::FONTSET_FOOTER_SUBLABEL:
+        return ToColorRef(style.footer_sub_label_style().foreground_color());
+
+      case TextRenderer::FONTSET_INFOLIST_CAPTION:
+        return ToColorRef(
+            style.infolist_style().caption_style().foreground_color());
+
+      case TextRenderer::FONTSET_INFOLIST_TITLE:
+        return ToColorRef(style.infolist_style().title_style().foreground_color());
+
+      case TextRenderer::FONTSET_INFOLIST_DESCRIPTION:
+        return ToColorRef(
+            style.infolist_style().description_style().foreground_color());
+
+      default:
+        LOG(DFATAL) << "Unknown type: " << type;
+        return RGB(0, 0, 0);
     }
-    case TextRenderer::FONTSET_CANDIDATE: {
-      font.lfHeight += (font.lfHeight > 0 ? 3 : -3);
-      font.lfWeight = FW_NORMAL;
-      return font;
-    }
-    case TextRenderer::FONTSET_DESCRIPTION:
-    case TextRenderer::FONTSET_FOOTER_INDEX:
-    case TextRenderer::FONTSET_FOOTER_LABEL:
-    case TextRenderer::FONTSET_FOOTER_SUBLABEL: {
-      font.lfWeight = FW_NORMAL;
-      return font;
-    }
-    default:
-      break;
   }
 
-  // TODO(horo): Not only infolist fonts but also candidate fonts
-  //             should be created from RendererStyle
-  RendererStyle style;
-  GetScaledRendererStyle(&style);
-  const auto& infostyle = style.infolist_style();
-  switch (type) {
-    case TextRenderer::FONTSET_INFOLIST_CAPTION: {
-      font.lfHeight = -infostyle.caption_style().font_size();
-      return font;
-    }
-    case TextRenderer::FONTSET_INFOLIST_TITLE: {
-      font.lfHeight = -infostyle.title_style().font_size();
-      return font;
-    }
-    case TextRenderer::FONTSET_INFOLIST_DESCRIPTION: {
-      font.lfHeight = -infostyle.description_style().font_size();
-      return font;
-    }
-    default:
-      break;
-  }
+  LOGFONT GetLogFont(TextRenderer::FONT_TYPE type) {
+    LOGFONT font = GetMessageBoxLogFont();
 
-  LOG(DFATAL) << "Unknown type: " << type;
-  return font;
-}
+    RendererStyle style;
+    GetScaledRendererStyle(&style);
+
+    switch (type) {
+      case TextRenderer::FONTSET_SHORTCUT:
+        if (style.text_styles_size() > kShortcutTextStyleIndex &&
+            style.text_styles(kShortcutTextStyleIndex).has_font_size()) {
+          font.lfHeight = -static_cast<int>(
+              std::lround(style.text_styles(kShortcutTextStyleIndex).font_size()));
+        } else {
+          font.lfHeight += (font.lfHeight > 0 ? 2 : -2);
+        }
+        font.lfWeight = FW_NORMAL;
+        return font;
+
+      case TextRenderer::FONTSET_CANDIDATE:
+        if (style.text_styles_size() > kCandidateTextStyleIndex &&
+            style.text_styles(kCandidateTextStyleIndex).has_font_size()) {
+          font.lfHeight = -static_cast<int>(
+              std::lround(style.text_styles(kCandidateTextStyleIndex).font_size()));
+        } else {
+          font.lfHeight += (font.lfHeight > 0 ? 2 : -2);
+        }
+        font.lfWeight = FW_SEMIBOLD;
+        return font;
+
+      case TextRenderer::FONTSET_DESCRIPTION:
+        if (style.text_styles_size() > kDescriptionTextStyleIndex &&
+            style.text_styles(kDescriptionTextStyleIndex).has_font_size()) {
+          font.lfHeight = -static_cast<int>(std::lround(
+              style.text_styles(kDescriptionTextStyleIndex).font_size()));
+        }
+        font.lfWeight = FW_NORMAL;
+        return font;
+
+      case TextRenderer::FONTSET_FOOTER_INDEX:
+      case TextRenderer::FONTSET_FOOTER_LABEL:
+        if (style.footer_style().has_font_size()) {
+          font.lfHeight =
+              -static_cast<int>(std::lround(style.footer_style().font_size()));
+        }
+        font.lfWeight = FW_NORMAL;
+        return font;
+
+      case TextRenderer::FONTSET_FOOTER_SUBLABEL:
+        if (style.footer_sub_label_style().has_font_size()) {
+          font.lfHeight = -static_cast<int>(
+              std::lround(style.footer_sub_label_style().font_size()));
+        }
+        font.lfWeight = FW_NORMAL;
+        return font;
+
+      case TextRenderer::FONTSET_INFOLIST_CAPTION:
+        if (style.infolist_style().caption_style().has_font_size()) {
+          font.lfHeight = -static_cast<int>(std::lround(
+              style.infolist_style().caption_style().font_size()));
+        }
+        font.lfWeight = FW_NORMAL;
+        return font;
+
+      case TextRenderer::FONTSET_INFOLIST_TITLE:
+        if (style.infolist_style().title_style().has_font_size()) {
+          font.lfHeight = -static_cast<int>(
+              std::lround(style.infolist_style().title_style().font_size()));
+        }
+        font.lfWeight = FW_NORMAL;
+        return font;
+
+      case TextRenderer::FONTSET_INFOLIST_DESCRIPTION:
+        if (style.infolist_style().description_style().has_font_size()) {
+          font.lfHeight = -static_cast<int>(std::lround(
+              style.infolist_style().description_style().font_size()));
+        }
+        font.lfWeight = FW_NORMAL;
+        return font;
+
+      default:
+        LOG(DFATAL) << "Unknown type: " << type;
+        return font;
+    }
+  }
 
 DWORD GetGdiDrawTextStyle(TextRenderer::FONT_TYPE type) {
   switch (type) {

@@ -46,7 +46,7 @@
 #include "client/client_interface.h"
 #include "protocol/candidate_window.pb.h"
 #include "protocol/renderer_command.pb.h"
-#include "renderer/renderer_style_handler.h"
+#include "protocol/renderer_style.pb.h"
 #include "renderer/table_layout.h"
 #include "renderer/win32/resource.h"
 #include "renderer/win32/text_renderer.h"
@@ -66,7 +66,7 @@ constexpr int kIndicatorWidthInDefaultDPI = 4;
 // DPI-invariant layout size constants in pixel unit.
 constexpr int kWindowBorder = 1;
 constexpr int kFooterSeparatorHeight = 1;
-constexpr int kRowRectPadding = 1;
+constexpr int kRowRectPadding = 4;
 
 // usage type for each column.
 enum COLUMN_TYPE {
@@ -81,22 +81,91 @@ enum COLUMN_TYPE {
 constexpr char kMinimumCandidateAndDescriptionWidthAsString[] =
     "そのほかの文字種";
 
-// Color scheme
-const COLORREF kFrameColor = RGB(0x96, 0x96, 0x96);
-const COLORREF kShortcutBackgroundColor = RGB(0xf3, 0xf4, 0xff);
-const COLORREF kSelectedRowBackgroundColor = RGB(0xd1, 0xea, 0xff);
-const COLORREF kDefaultBackgroundColor = RGB(0xff, 0xff, 0xff);
-const COLORREF kSelectedRowFrameColor = RGB(0x7f, 0xac, 0xdd);
-const COLORREF kIndicatorBackgroundColor = RGB(0xe0, 0xe0, 0xe0);
-const COLORREF kIndicatorColor = RGB(0x75, 0x90, 0xb8);
-const COLORREF kFooterTopColor = RGB(0xff, 0xff, 0xff);
-const COLORREF kFooterBottomColor = RGB(0xee, 0xee, 0xee);
+using ::mozc::renderer::RendererStyle;
 
 // ------------------------------------------------------------------------
 // Utility functions
 // ------------------------------------------------------------------------
+constexpr size_t kShortcutTextStyleIndex = 0;
+constexpr size_t kCandidateTextStyleIndex = 2;
+
 CRect ToCRect(const Rect& rect) {
   return CRect(rect.Left(), rect.Top(), rect.Right(), rect.Bottom());
+}
+
+COLORREF ToColorRef(const RendererStyle::RGBAColor& color) {
+  return RGB(static_cast<int>(color.r()), static_cast<int>(color.g()),
+             static_cast<int>(color.b()));
+}
+
+RendererStyle GetCurrentRendererStyle() {
+  RendererStyle style;
+  GetScaledRendererStyle(&style);
+  return style;
+}
+
+COLORREF GetFrameColor(const RendererStyle& style) {
+  return ToColorRef(style.border_color());
+}
+
+COLORREF GetShortcutBackgroundColor(const RendererStyle& style) {
+  return ToColorRef(
+      style.text_styles(kShortcutTextStyleIndex).background_color());
+}
+
+COLORREF GetSelectedRowBackgroundColor(const RendererStyle& style) {
+  return ToColorRef(style.focused_background_color());
+}
+
+COLORREF GetDefaultBackgroundColor(const RendererStyle& style) {
+  return ToColorRef(
+      style.text_styles(kCandidateTextStyleIndex).background_color());
+}
+
+COLORREF GetSelectedRowFrameColor(const RendererStyle& style) {
+  return ToColorRef(style.focused_border_color());
+}
+
+COLORREF GetIndicatorBackgroundColor(const RendererStyle& style) {
+  return ToColorRef(style.scrollbar_background_color());
+}
+
+COLORREF GetIndicatorColor(const RendererStyle& style) {
+  return ToColorRef(style.scrollbar_indicator_color());
+}
+
+COLORREF GetFooterTopColor(const RendererStyle& style) {
+  return ToColorRef(style.footer_top_color());
+}
+
+COLORREF GetFooterBottomColor(const RendererStyle& style) {
+  return ToColorRef(style.footer_bottom_color());
+}
+
+COLORREF GetFooterBorderColor(const RendererStyle& style) {
+  if (style.footer_border_colors_size() > 0) {
+    return ToColorRef(style.footer_border_colors(0));
+  }
+  return GetFrameColor(style);
+}
+
+int GetWindowCornerRadius() {
+  const int radius = static_cast<int>(6.0 * GetDPIScalingFactor());
+  return (radius < 6) ? 6 : radius;
+}
+
+void UpdateRoundedWindowRegion(HWND hwnd, const Size& size) {
+  if (hwnd == nullptr || size.width <= 0 || size.height <= 0) {
+    return;
+  }
+
+  const int radius = GetWindowCornerRadius();
+  HRGN region =
+      ::CreateRoundRectRgn(0, 0, size.width + 1, size.height + 1,
+                           radius * 2, radius * 2);
+  if (region != nullptr) {
+    ::SetWindowRgn(hwnd, region, TRUE);
+  }
 }
 
 // Returns the smallest index of the given candidate list which satisfies
@@ -454,9 +523,10 @@ void CandidateWindow::UpdateLayout(
     const commands::CandidateWindow& candidates) {
   *candidate_window_ = candidates;
 
-  // If we detect any change of font parameters, update text renderer
+  // Refresh text renderer so color/font cache follows the latest renderer style.
+  text_renderer_->OnThemeChanged();
+
   if (metrics_changed_) {
-    text_renderer_->OnThemeChanged();
     metrics_changed_ = false;
   }
 
@@ -487,28 +557,8 @@ void CandidateWindow::UpdateLayout(
   if (candidate_window_->has_footer()) {
     Size footer_size(0, 0);
 
-    // Calculate the size to display a label string.
-    if (candidate_window_->footer().has_label()) {
-      const std::wstring footer_label =
-          mozc::win32::Utf8ToWide(candidate_window_->footer().label());
-      const Size label_string_size = text_renderer_->MeasureString(
-          TextRenderer::FONTSET_FOOTER_LABEL, L" " + footer_label + L" ");
-      footer_size.width += label_string_size.width;
-      footer_size.height =
-          std::max(footer_size.height, label_string_size.height);
-    } else if (candidate_window_->footer().has_sub_label()) {
-      // Currently the sub label will not be shown unless (main) label is
-      // absent.
-      // TODO(yukawa): Refactor the layout system for the footer.
-      const std::wstring footer_sub_label =
-          mozc::win32::Utf8ToWide(candidate_window_->footer().sub_label());
-      const Size label_string_size =
-          text_renderer_->MeasureString(TextRenderer::FONTSET_FOOTER_SUBLABEL,
-                                        L" " + footer_sub_label + L" ");
-      footer_size.width += label_string_size.width;
-      footer_size.height =
-          std::max(footer_size.height, label_string_size.height);
-    }
+    // We intentionally do not reserve space for footer label/sub_label
+    // such as "Tabキーで選択".
 
     // Calculate the size to display a index string.
     if (candidate_window_->footer().index_visible()) {
@@ -548,10 +598,11 @@ void CandidateWindow::UpdateLayout(
                                         minimum_size.width);
     }
 
-    // Add separator height
-    footer_size.height += kFooterSeparatorHeight;
-
-    table_layout_->EnsureFooterSize(footer_size);
+    if (footer_size.height > 0) {
+      // Add separator height only when footer content actually exists.
+      footer_size.height += kFooterSeparatorHeight;
+      table_layout_->EnsureFooterSize(footer_size);
+    }
   }
 
   table_layout_->SetRowRectPadding(kRowRectPadding);
@@ -614,6 +665,10 @@ void CandidateWindow::UpdateLayout(
   table_layout_->EnsureCellSize(COLUMN_GAP2, gap2_size);
 
   table_layout_->FreezeLayout();
+
+  if (m_hWnd != nullptr) {
+    UpdateRoundedWindowRegion(m_hWnd, table_layout_->GetTotalSize());
+  }
 }
 
 void CandidateWindow::SetSendCommandInterface(
@@ -691,14 +746,15 @@ void CandidateWindow::DrawVScrollBar(HDC dc) {
     const int end_index =
         candidate_window_->candidate(candidates_in_page - 1).index();
 
+    const auto style = GetCurrentRendererStyle();
     const CRect background_crect = ToCRect(vscroll_rect);
-    FillSolidRect(dc, &background_crect, kIndicatorBackgroundColor);
+    FillSolidRect(dc, &background_crect, GetIndicatorBackgroundColor(style));
 
     const mozc::Rect& indicator_rect = table_layout_->GetVScrollIndicatorRect(
         begin_index, end_index, candidates_total);
 
     const CRect indicator_crect = ToCRect(indicator_rect);
-    FillSolidRect(dc, &indicator_crect, kIndicatorColor);
+    FillSolidRect(dc, &indicator_crect, GetIndicatorColor(style));
   }
 }
 
@@ -715,8 +771,10 @@ void CandidateWindow::DrawShortcutBackground(HDC dc) {
       const int width = shortcut_colmun_rect.Right() - row_rect.Left();
       shortcut_colmun_rect.origin.x = row_rect.Left();
       shortcut_colmun_rect.size.width = width;
+      const auto style = GetCurrentRendererStyle();
       const CRect shortcut_colmun_crect = ToCRect(shortcut_colmun_rect);
-      FillSolidRect(dc, &shortcut_colmun_crect, kShortcutBackgroundColor);
+      FillSolidRect(dc, &shortcut_colmun_crect,
+                    GetShortcutBackgroundColor(style));
     }
   }
 }
@@ -727,7 +785,10 @@ void CandidateWindow::DrawFooter(HDC dc) {
     return;
   }
 
-  const COLORREF kFooterSeparatorColors[kFooterSeparatorHeight] = {kFrameColor};
+  const auto style = GetCurrentRendererStyle();
+
+  const COLORREF kFooterSeparatorColors[kFooterSeparatorHeight] = {
+    GetFooterBorderColor(style)};
 
   // DC pen is available in Windows 2000 and later.
   {
@@ -747,18 +808,10 @@ void CandidateWindow::DrawFooter(HDC dc) {
       footer_rect.Left(), footer_rect.Top() + kFooterSeparatorHeight,
       footer_rect.Width(), footer_rect.Height() - kFooterSeparatorHeight);
 
-  // Draw gradient rect in the footer area
+  // Draw flat footer background for a cleaner modern look.
   {
-    TRIVERTEX vertices[] = {
-        {footer_content_rect.Left(), footer_content_rect.Top(),
-         GetRValue(kFooterTopColor) << 8, GetGValue(kFooterTopColor) << 8,
-         GetBValue(kFooterTopColor) << 8, 0xff00},
-        {footer_content_rect.Right(), footer_content_rect.Bottom(),
-         GetRValue(kFooterBottomColor) << 8, GetGValue(kFooterBottomColor) << 8,
-         GetBValue(kFooterBottomColor) << 8, 0xff00}};
-    GRADIENT_RECT indices[] = {{0, 1}};
-    ::GradientFill(dc, &vertices[0], std::size(vertices), &indices[0],
-                   std::size(indices), GRADIENT_FILL_RECT_V);
+    const CRect footer_content_crect = ToCRect(footer_content_rect);
+    FillSolidRect(dc, &footer_content_crect, GetFooterTopColor(style));
   }
 
   int left_used = 0;
@@ -798,24 +851,8 @@ void CandidateWindow::DrawFooter(HDC dc) {
     right_used = index_guide_size.width;
   }
 
-  if (candidate_window_->footer().has_label()) {
-    const Rect label_rect(left_used, footer_content_rect.Top(),
-                          footer_content_rect.Width() - left_used - right_used,
-                          footer_content_rect.Height());
-    const std::wstring footer_label =
-        mozc::win32::Utf8ToWide(candidate_window_->footer().label());
-    text_renderer_->RenderText(dc, L" " + footer_label + L" ", label_rect,
-                               TextRenderer::FONTSET_FOOTER_LABEL);
-  } else if (candidate_window_->footer().has_sub_label()) {
-    const std::wstring footer_sub_label =
-        mozc::win32::Utf8ToWide(candidate_window_->footer().sub_label());
-    const Rect label_rect(left_used, footer_content_rect.Top(),
-                          footer_content_rect.Width() - left_used - right_used,
-                          footer_content_rect.Height());
-    const std::wstring text = L" " + footer_sub_label + L" ";
-    text_renderer_->RenderText(dc, text, label_rect,
-                               TextRenderer::FONTSET_FOOTER_SUBLABEL);
-  }
+  // Intentionally do not render footer label/sub_label
+  // such as "Tabキーで選択".
 }
 
 void CandidateWindow::DrawSelectedRect(HDC dc) {
@@ -827,13 +864,25 @@ void CandidateWindow::DrawSelectedRect(HDC dc) {
       focused_array_index < candidate_window_->candidate_size()) {
     (void)candidate_window_->candidate(focused_array_index);
 
-    const CRect selected_rect =
-        ToCRect(table_layout_->GetRowRect(focused_array_index));
-    FillSolidRect(dc, &selected_rect, kSelectedRowBackgroundColor);
+    const auto style = GetCurrentRendererStyle();
 
-    ::SetDCBrushColor(dc, kSelectedRowFrameColor);
-    ::FrameRect(dc, &selected_rect,
-                static_cast<HBRUSH>(::GetStockObject(DC_BRUSH)));
+    CRect selected_rect =
+        ToCRect(table_layout_->GetRowRect(focused_array_index));
+
+    selected_rect.DeflateRect(4, 1);
+
+    const int radius = GetWindowCornerRadius();
+
+    wil::unique_select_object prev_pen =
+        wil::SelectObject(dc, static_cast<HPEN>(::GetStockObject(DC_PEN)));
+    wil::unique_select_object prev_brush =
+        wil::SelectObject(dc, static_cast<HBRUSH>(::GetStockObject(DC_BRUSH)));
+
+    ::SetDCPenColor(dc, GetSelectedRowFrameColor(style));
+    ::SetDCBrushColor(dc, GetSelectedRowBackgroundColor(style));
+    ::RoundRect(dc, selected_rect.left, selected_rect.top,
+                selected_rect.right, selected_rect.bottom,
+                radius, radius);
   }
 }
 
@@ -847,27 +896,38 @@ void CandidateWindow::DrawInformationIcon(HDC dc) {
       rect.right = rect.right - (2.0 * scale_factor);
       rect.top += (2.0 * scale_factor);
       rect.bottom -= (2.0 * scale_factor);
-      FillSolidRect(dc, &rect, kIndicatorColor);
-      ::SetDCBrushColor(dc, kIndicatorColor);
+      const auto style = GetCurrentRendererStyle();
+
+      FillSolidRect(dc, &rect, GetIndicatorColor(style));
+      ::SetDCBrushColor(dc, GetIndicatorColor(style));
       ::FrameRect(dc, &rect, static_cast<HBRUSH>(::GetStockObject(DC_BRUSH)));
     }
   }
 }
 
 void CandidateWindow::DrawBackground(HDC dc) {
+  const auto style = GetCurrentRendererStyle();
   const Rect client_rect(Point(0, 0), table_layout_->GetTotalSize());
   const CRect client_crect = ToCRect(client_rect);
-  FillSolidRect(dc, &client_crect, kDefaultBackgroundColor);
+  FillSolidRect(dc, &client_crect, GetDefaultBackgroundColor(style));
 }
 
 void CandidateWindow::DrawFrame(HDC dc) {
+  const auto style = GetCurrentRendererStyle();
   const Rect client_rect(Point(0, 0), table_layout_->GetTotalSize());
   const CRect client_crect = ToCRect(client_rect);
 
-  // DC brush is available in Windows 2000 and later.
-  ::SetDCBrushColor(dc, kFrameColor);
-  ::FrameRect(dc, &client_crect,
-              static_cast<HBRUSH>(::GetStockObject(DC_BRUSH)));
+  const int radius = GetWindowCornerRadius();
+
+  wil::unique_select_object prev_pen =
+      wil::SelectObject(dc, static_cast<HPEN>(::GetStockObject(DC_PEN)));
+  wil::unique_select_object prev_brush =
+      wil::SelectObject(dc, static_cast<HBRUSH>(::GetStockObject(HOLLOW_BRUSH)));
+
+  ::SetDCPenColor(dc, GetFrameColor(style));
+  ::RoundRect(dc, client_crect.left, client_crect.top,
+              client_crect.right, client_crect.bottom,
+              radius * 2, radius * 2);
 }
 
 void CandidateWindow::set_mouse_moving(bool moving) { mouse_moving_ = moving; }

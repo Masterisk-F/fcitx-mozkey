@@ -101,6 +101,7 @@ class ConfigDialog : public QDialog, private Ui::ConfigDialog {
   int initial_preedit_method_;
   bool initial_use_keyboard_to_change_preedit_method_;
   bool initial_use_mode_indicator_;
+  bool initial_use_dark_mode_candidate_window_;
   std::map<QString, config::Config::SessionKeymap>
       keymapname_sessionkeymap_map_;
 };

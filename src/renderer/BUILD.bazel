@@ -111,6 +111,7 @@ mozc_cc_library(
     visibility = ["//renderer:__subpackages__"],
     deps = [
         ":renderer_interface",
+        ":renderer_style_handler",
         "//base:const",
         "//base:random",
         "//base:system_util",
