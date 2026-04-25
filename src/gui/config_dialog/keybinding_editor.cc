@@ -155,6 +155,29 @@ constexpr auto kWinVirtualKeyModifierNonRequiredTable = CreateFlatMap<
 constexpr quint32 kLeftShiftScanCode = 0x2A;
 constexpr quint32 kRightShiftScanCode = 0x36;
 
+QString GetCtrlKeyName(const QKeyEvent &key_event) {
+  const DWORD virtual_key = key_event.nativeVirtualKey();
+  if (virtual_key == VK_LCONTROL) {
+    return QStringLiteral("LeftCtrl");
+  }
+  if (virtual_key == VK_RCONTROL) {
+    return QStringLiteral("RightCtrl");
+  }
+
+  const quint32 scan_code = key_event.nativeScanCode();
+
+  // Left Ctrl:  0x1D
+  // Right Ctrl: 0xE01D on Windows extended scan code paths.
+  if ((scan_code & 0xFF) == 0x1D) {
+    if ((scan_code & 0xFF00) == 0xE000) {
+      return QStringLiteral("RightCtrl");
+    }
+    return QStringLiteral("LeftCtrl");
+  }
+
+  return QString();
+}
+
 QString GetShiftKeyName(const QKeyEvent &key_event) {
   const quint32 scan_code = key_event.nativeScanCode() & 0xFF;
   switch (scan_code) {
@@ -199,6 +222,7 @@ KeyBindingFilter::KeyBindingFilter(QLineEdit *line_edit, QPushButton *ok_button)
       ctrl_pressed_(false),
       alt_pressed_(false),
       shift_pressed_(false),
+      ctrl_key_name_(),
       shift_key_name_(),
       line_edit_(line_edit),
       ok_button_(ok_button) {
@@ -210,6 +234,7 @@ void KeyBindingFilter::Reset() {
   alt_pressed_ = false;
   shift_pressed_ = false;
   shift_key_name_.clear();
+  ctrl_key_name_.clear();
   modifier_required_key_.clear();
   modifier_non_required_key_.clear();
   unknown_key_.clear();
@@ -237,7 +262,11 @@ KeyBindingFilter::KeyState KeyBindingFilter::Encode(QString *result) const {
   QStringList results;
 
   if (ctrl_pressed_) {
-    results << QStringLiteral("Ctrl");
+    if (!ctrl_key_name_.isEmpty()) {
+      results << ctrl_key_name_;
+    } else {
+      results << QStringLiteral("Ctrl");
+    }
   }
 
   if (shift_pressed_) {
@@ -285,9 +314,24 @@ KeyBindingFilter::KeyState KeyBindingFilter::Encode(QString *result) const {
                        : modifier_required_key_[0].toLatin1();
 
   // Alt or Ctrl or these combinations
-  if ((alt_pressed_ || ctrl_pressed_) && modifier_non_required_key_.isEmpty() &&
-      modifier_required_key_.isEmpty()) {
-    result_state = KeyBindingFilter::DENY_KEY;
+  const bool has_non_modifier_key =
+      !modifier_non_required_key_.isEmpty() ||
+      !modifier_required_key_.isEmpty();
+
+  const bool is_explicit_left_or_right_ctrl =
+      (ctrl_key_name_ == QLatin1String("LeftCtrl") ||
+      ctrl_key_name_ == QLatin1String("RightCtrl"));
+
+  const bool ctrl_only =
+      ctrl_pressed_ && !alt_pressed_ && !shift_pressed_ &&
+      !has_non_modifier_key;
+
+  // Keep rejecting Alt-only, Ctrl+Shift-only, Ctrl+Alt-only, etc.
+  // Allow only explicit LeftCtrl/RightCtrl single-key bindings.
+  if (!has_non_modifier_key && (alt_pressed_ || ctrl_pressed_)) {
+    if (!(ctrl_only && is_explicit_left_or_right_ctrl)) {
+      result_state = KeyBindingFilter::DENY_KEY;
+    }
   }
 
   // TODO(taku) Shift + 3 ("#" on US-keyboard) is also valid
@@ -366,6 +410,11 @@ KeyBindingFilter::KeyState KeyBindingFilter::AddKey(const QKeyEvent &key_event,
 #else   // __APPLE__
     case Qt::Key_Control:
       ctrl_pressed_ = true;
+#ifdef _WIN32
+    ctrl_key_name_ = GetCtrlKeyName(key_event);
+#else   // _WIN32
+    ctrl_key_name_.clear();
+#endif  // _WIN32
       return Encode(result);
       //    case Qt::Key_Meta:  // Windows key
     case Qt::Key_Alt:

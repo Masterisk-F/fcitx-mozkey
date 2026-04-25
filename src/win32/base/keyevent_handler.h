@@ -75,35 +75,31 @@ class KeyEventHandler {
                                             InputBehavior* behavior);
 
   static KeyEventHandlerResult ImeProcessKey(
-      const VirtualKey& virtual_key, BYTE scan_code, bool is_key_down,
+      const VirtualKey& virtual_key, UINT scan_code, bool is_key_down,
       const KeyboardStatus& keyboard_status, const InputBehavior& behavior,
       const InputState& initial_state, const commands::Context& context,
       client::ClientInterface* client, Win32KeyboardInterface* keyboard,
       InputState* next_state, commands::Output* output);
 
   static KeyEventHandlerResult ImeToAsciiEx(
-      const VirtualKey& virtual_key, BYTE scan_code, bool is_key_down,
+      const VirtualKey& virtual_key, UINT scan_code, bool is_key_down,
       const KeyboardStatus& keyboard_status, const InputBehavior& behavior,
       const InputState& initial_state, const commands::Context& context,
       client::ClientInterface* client, Win32KeyboardInterface* keyboard,
       InputState* next_state, commands::Output* output);
 
  protected:
-  static KeyEventHandlerResult HandleKey(const VirtualKey& virtual_key,
-                                         BYTE scan_code, bool is_key_down,
-                                         const KeyboardStatus& keyboard_status,
-                                         const InputBehavior& behavior,
-                                         const InputState& initial_state,
-                                         Win32KeyboardInterface* keyboard,
-                                         commands::KeyEvent* key);
+  static KeyEventHandlerResult HandleKey(
+      const VirtualKey& virtual_key, UINT scan_code, bool is_key_down,
+      const KeyboardStatus& keyboard_status, const InputBehavior& behavior,
+      const InputState& initial_state, Win32KeyboardInterface* keyboard,
+      commands::KeyEvent* key);
 
-  static bool ConvertToKeyEvent(const VirtualKey& virtual_key, BYTE scan_code,
-                                bool is_key_down, bool is_menu_active,
-                                const InputBehavior& behavior,
-                                const InputState& ime_state,
-                                const KeyboardStatus& keyboard_status,
-                                Win32KeyboardInterface* keyboard,
-                                commands::KeyEvent* key);
+  static bool ConvertToKeyEvent(
+      const VirtualKey& virtual_key, UINT scan_code, bool is_key_down,
+      bool is_menu_active, const InputBehavior& behavior,
+      const InputState& ime_state, const KeyboardStatus& keyboard_status,
+      Win32KeyboardInterface* keyboard, commands::KeyEvent* key);
 
   // This function updates the current keyboard status so that a user will not
   // be bothered with unexpected Kana-lock.  See b/2601927, b/2521571,

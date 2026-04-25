@@ -352,16 +352,47 @@ void ClearModifyerKeyIfNeeded(const KeyEvent* key,
   }
 }
 
-BYTE GetPhysicalVirtualKey(const VirtualKey& virtual_key, BYTE scan_code) {
-  if (virtual_key.virtual_key() == VK_SHIFT) {
-    const UINT physical_virtual_key =
-        ::MapVirtualKeyW(static_cast<UINT>(scan_code), MAPVK_VSC_TO_VK_EX);
-    if (physical_virtual_key == VK_LSHIFT ||
-        physical_virtual_key == VK_RSHIFT) {
-      return static_cast<BYTE>(physical_virtual_key);
+BYTE GetPhysicalVirtualKey(const VirtualKey& virtual_key, UINT scan_code) {
+  switch (virtual_key.virtual_key()) {
+    case VK_SHIFT:
+    case VK_CONTROL: {
+      const UINT physical_virtual_key =
+          ::MapVirtualKeyW(scan_code, MAPVK_VSC_TO_VK_EX);
+      switch (physical_virtual_key) {
+        case VK_LSHIFT:
+        case VK_RSHIFT:
+        case VK_LCONTROL:
+        case VK_RCONTROL:
+          return static_cast<BYTE>(physical_virtual_key);
+        default:
+          break;
+      }
+      break;
     }
+    default:
+      break;
   }
   return virtual_key.virtual_key();
+}
+
+bool IsSameModifierVirtualKey(BYTE expected, BYTE actual) {
+  if (expected == actual) {
+    return true;
+  }
+
+  switch (expected) {
+    case VK_SHIFT:
+      return actual == VK_LSHIFT || actual == VK_RSHIFT;
+
+    case VK_CONTROL:
+      return actual == VK_LCONTROL || actual == VK_RCONTROL;
+
+    case VK_MENU:
+      return actual == VK_LMENU || actual == VK_RMENU;
+
+    default:
+      return false;
+  }
 }
 
 // See b/2576120 for details.
@@ -399,7 +430,7 @@ bool IsNotimplementedKey(const VirtualKey& virtual_key) {
   }
 }
 
-bool ConvertToKeyEventMain(const VirtualKey& virtual_key, BYTE scan_code,
+bool ConvertToKeyEventMain(const VirtualKey& virtual_key, UINT scan_code,
                            bool is_key_down, bool is_menu_active,
                            const InputBehavior& behavior,
                            const InputState& ime_state,
@@ -439,6 +470,16 @@ bool ConvertToKeyEventMain(const VirtualKey& virtual_key, BYTE scan_code,
 
   if (keyboard_status.IsPressed(VK_CONTROL)) {
     modifer_keys->insert(KeyEvent::CTRL);
+  }
+
+  if (keyboard_status.IsPressed(VK_LCONTROL)) {
+    modifer_keys->insert(KeyEvent::CTRL);
+    modifer_keys->insert(KeyEvent::LEFT_CTRL);
+  }
+
+  if (keyboard_status.IsPressed(VK_RCONTROL)) {
+    modifer_keys->insert(KeyEvent::CTRL);
+    modifer_keys->insert(KeyEvent::RIGHT_CTRL);
   }
 
   if (keyboard_status.IsPressed(VK_MENU)) {
@@ -483,6 +524,16 @@ bool ConvertToKeyEventMain(const VirtualKey& virtual_key, BYTE scan_code,
       modifer_keys->insert(KeyEvent::CTRL);
       return true;
 
+    case VK_LCONTROL:
+      modifer_keys->insert(KeyEvent::CTRL);
+      modifer_keys->insert(KeyEvent::LEFT_CTRL);
+      return true;
+
+    case VK_RCONTROL:
+      modifer_keys->insert(KeyEvent::CTRL);
+      modifer_keys->insert(KeyEvent::RIGHT_CTRL);
+      return true;
+
     case VK_MENU:
       modifer_keys->insert(KeyEvent::ALT);
       return true;
@@ -495,7 +546,7 @@ bool ConvertToKeyEventMain(const VirtualKey& virtual_key, BYTE scan_code,
   // The high-order bit of this value is set if the key is up.
   // http://msdn.microsoft.com/en-us/library/ms646322.aspx
   const UINT to_unicode_scancode =
-      static_cast<UINT>(scan_code) | (is_key_down ? 0 : 0x8000);
+      (scan_code & 0xFF) | (is_key_down ? 0 : 0x8000);
 
   const DWORD to_unicode_flag = (is_menu_active ? 1 : 0);
 
@@ -667,7 +718,7 @@ KeyEventHandlerResult::KeyEventHandlerResult()
       succeeded(false) {}
 
 KeyEventHandlerResult KeyEventHandler::HandleKey(
-    const VirtualKey& virtual_key, BYTE scan_code, bool is_key_down,
+    const VirtualKey& virtual_key, UINT scan_code, bool is_key_down,
     const KeyboardStatus& initial_status, const InputBehavior& behavior,
     const InputState& ime_state, Win32KeyboardInterface* keyboard,
     mozc::commands::KeyEvent* key) {
@@ -763,6 +814,8 @@ KeyEventHandlerResult KeyEventHandler::HandleKey(
     case VK_LSHIFT:
     case VK_RSHIFT:
     case VK_CONTROL:
+    case VK_LCONTROL:
+    case VK_RCONTROL:
     case VK_MENU:
       if (is_key_down) {
         // Will not eat this message.
@@ -772,7 +825,8 @@ KeyEventHandlerResult KeyEventHandler::HandleKey(
         return result;
       }
 
-      if (ime_state.last_down_key.virtual_key() != physical_virtual_key) {
+      if (!IsSameModifierVirtualKey(ime_state.last_down_key.virtual_key(),
+                                    physical_virtual_key)) {
         // Will not eat this message.
         result.succeeded = true;
         result.should_be_eaten = false;
@@ -805,7 +859,7 @@ KeyEventHandlerResult KeyEventHandler::HandleKey(
 }
 
 KeyEventHandlerResult KeyEventHandler::ImeProcessKey(
-    const VirtualKey& virtual_key, BYTE scan_code, bool is_key_down,
+    const VirtualKey& virtual_key, UINT scan_code, bool is_key_down,
     const KeyboardStatus& keyboard_status, const InputBehavior& behavior,
     const InputState& initial_state, const commands::Context& context,
     client::ClientInterface* client, Win32KeyboardInterface* keyboard,
@@ -899,7 +953,7 @@ KeyEventHandlerResult KeyEventHandler::ImeProcessKey(
 }
 
 KeyEventHandlerResult KeyEventHandler::ImeToAsciiEx(
-    const VirtualKey& virtual_key, BYTE scan_code, bool is_key_down,
+    const VirtualKey& virtual_key, UINT scan_code, bool is_key_down,
     const KeyboardStatus& keyboard_status, const InputBehavior& behavior,
     const InputState& initial_state, const commands::Context& context,
     client::ClientInterface* client, Win32KeyboardInterface* keyboard,
@@ -994,7 +1048,7 @@ KeyEventHandlerResult KeyEventHandler::ImeToAsciiEx(
 }
 
 bool KeyEventHandler::ConvertToKeyEvent(
-    const VirtualKey& virtual_key, BYTE scan_code, bool is_key_down,
+    const VirtualKey& virtual_key, UINT scan_code, bool is_key_down,
     bool is_menu_active, const InputBehavior& behavior,
     const InputState& ime_state, const KeyboardStatus& keyboard_status,
     Win32KeyboardInterface* keyboard, mozc::commands::KeyEvent* key) {

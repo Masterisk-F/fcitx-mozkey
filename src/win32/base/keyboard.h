@@ -65,6 +65,7 @@ class LParamKeyInfo {
   explicit LParamKeyInfo(LPARAM lparam);
   int GetKeyRepeatCount() const;
   BYTE GetScanCode() const;
+  UINT GetScanCodeForMapVirtualKey() const;
   bool IsExtendedKey() const;
   bool HasContextCode() const;
   bool IsPreviousStateDwon() const;
