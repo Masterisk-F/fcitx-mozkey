@@ -255,9 +255,9 @@ HRESULT OnTestKey(TipTextService* text_service, ITfContext* context,
       Win32KeyboardInterface::CreateDefault());
 
   const KeyEventHandlerResult result = KeyEventHandler::ImeProcessKey(
-      vk, key_info.GetScanCode(), is_key_down, keyboard_status, behavior,
-      input_state, mozc_context, private_context->GetClient(), keyboard.get(),
-      &next_state, &temporal_output);
+      vk, key_info.GetScanCodeForMapVirtualKey(), is_key_down, keyboard_status,
+      behavior, input_state, mozc_context, private_context->GetClient(),
+      keyboard.get(), &next_state, &temporal_output);
   if (!result.succeeded) {
     *eaten = FALSE;
     return S_OK;
@@ -430,9 +430,9 @@ HRESULT OnKey(TipTextService* text_service, ITfContext* context,
 
     InputState next_state;
     const KeyEventHandlerResult result = KeyEventHandler::ImeToAsciiEx(
-        vk, key_info.GetScanCode(), is_key_down, keyboard_status, behavior,
-        ime_state, mozc_context, private_context->GetClient(), keyboard.get(),
-        &next_state, &temporal_output);
+        vk, key_info.GetScanCodeForMapVirtualKey(), is_key_down, keyboard_status,
+        behavior, ime_state, mozc_context, private_context->GetClient(),
+        keyboard.get(), &next_state, &temporal_output);
 
     if (!result.succeeded) {
       // no message generated.

@@ -126,6 +126,21 @@ TEST(KeyInfoUtilTest, ContainsKey) {
     KeyParser::ParseKey("ctrl m", &key);
     EXPECT_FALSE(KeyInfoUtil::ContainsKey(direct_mode_keys, key));
   }
+  {
+    KeyEvent key;
+    KeyParser::ParseKey("leftctrl j", &key);
+    EXPECT_TRUE(KeyInfoUtil::ContainsKey(direct_mode_keys, key));
+  }
+  {
+    KeyEvent key;
+    KeyParser::ParseKey("rightctrl k", &key);
+    EXPECT_TRUE(KeyInfoUtil::ContainsKey(direct_mode_keys, key));
+  }
+  {
+    KeyEvent key;
+    KeyParser::ParseKey("rightctrl m", &key);
+    EXPECT_FALSE(KeyInfoUtil::ContainsKey(direct_mode_keys, key));
+  }
 }
 
 }  // namespace

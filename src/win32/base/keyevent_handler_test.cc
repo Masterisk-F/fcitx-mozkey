@@ -1659,10 +1659,12 @@ TEST_F(KeyEventHandlerTest, ProtocolAnomalyModiferKeyMayBeSentOnKeyUp) {
     EXPECT_TRUE(actual_input.key().has_mode());
     EXPECT_EQ(actual_input.key().mode(), commands::HIRAGANA);
     EXPECT_FALSE(actual_input.key().has_modifiers());
-    EXPECT_EQ(actual_input.key().modifier_keys_size(), 1);
+    EXPECT_EQ(actual_input.key().modifier_keys_size(), 2);
     // Interestingly we have to set SHIFT modifier in spite of the Shift key
     // has been just released.
     EXPECT_EQ(actual_input.key().modifier_keys(0), commands::KeyEvent::SHIFT);
+    EXPECT_EQ(actual_input.key().modifier_keys(1),
+              commands::KeyEvent::LEFT_SHIFT);
     EXPECT_FALSE(actual_input.key().has_special_key());
   }
 }

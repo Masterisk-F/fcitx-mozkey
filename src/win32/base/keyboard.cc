@@ -52,6 +52,14 @@ BYTE LParamKeyInfo::GetScanCode() const {
   return static_cast<BYTE>((lparam_ >> 16) & 0xff);
 }
 
+UINT LParamKeyInfo::GetScanCodeForMapVirtualKey() const {
+  UINT scan_code = GetScanCode();
+  if (IsExtendedKey()) {
+    scan_code |= 0xE000;
+  }
+  return scan_code;
+}
+
 bool LParamKeyInfo::IsExtendedKey() const {
   // http://msdn.microsoft.com/en-us/library/ms646267.aspx#_win32_Keystroke_Message_Flags
   return ((lparam_ >> 24) & 0x1) == 0x1;
