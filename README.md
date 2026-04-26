@@ -8,7 +8,7 @@ This repository is my personal fork of [google/mozc](https://github.com/google/m
 Download / Install
 ------------------
 
-Windows 用のビルド済み MSI は Releases からダウンロードできます。
+Windows 用のビルド済み MSI は [Releases](https://github.com/koyasi777/mozc/releases) からダウンロードできます。
 
 - 通常の 64-bit Windows では `Mozc64_myproduct_v0.1.0_x64.msi` を使用してください。
 - 初回リリースは pre-release として公開しています。
@@ -17,8 +17,6 @@ Windows 用のビルド済み MSI は Releases からダウンロードできま
 > このビルドは google/mozc の公式配布物ではありません。
 > 個人用 fork の experimental / pre-release build です。
 > MSI は署名されていないため、Windows の警告が表示される場合があります。
-
-[Releases](https://github.com/koyasi777/mozc/releases)
 
 Main branches
 -------------
