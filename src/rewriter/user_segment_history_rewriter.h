@@ -34,6 +34,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -93,6 +94,18 @@ class UserSegmentHistoryRewriter : public RewriterInterface {
     const converter::Candidate* candidate;
   };
 
+  struct RevertEntry {
+    std::string key;
+    std::string value;
+    size_t value_begin = 0;
+    size_t value_end = 0;
+  };
+
+  struct PendingRevert {
+    std::vector<RevertEntry> entries;
+    std::string committed_value;
+  };
+
   static Segments MakeLearningSegmentsFromInnerSegments(
       const ConversionRequest& request, const Segments& segments);
 
@@ -107,9 +120,11 @@ class UserSegmentHistoryRewriter : public RewriterInterface {
   // Finish() operation in Revert().
   void RememberFirstCandidate(const ConversionRequest& request,
                               const Segments& segments, size_t segment_index,
-                              std::vector<std::string>& revert_entries);
+                              size_t value_begin, size_t value_end,
+                              std::vector<RevertEntry>& revert_entries);
+
   void RememberNumberPreference(const Segment& segment,
-                                std::vector<std::string>& revert_entries);
+                                std::vector<RevertEntry>& revert_entries);
   bool RewriteNumber(Segment* segment) const;
   bool ShouldRewrite(const Segment& segment, size_t* max_candidates_size) const;
   void InsertTriggerKey(const Segment& segment);
@@ -118,10 +133,15 @@ class UserSegmentHistoryRewriter : public RewriterInterface {
   bool SortCandidates(absl::Span<const ScoreCandidate> sorted_scores,
                       Segment* segment) const;
   Score Fetch(absl::string_view key, uint32_t weight) const;
-  void Insert(absl::string_view key, bool force,
-              std::vector<std::string>& revert_entries);
-  void MaybeInsertRevertEntry(absl::string_view key,
-                              std::vector<std::string>& revert_entries);
+  void Insert(absl::string_view key, absl::string_view value,
+              size_t value_begin, size_t value_end, bool force,
+              std::vector<RevertEntry>& revert_entries);
+
+  void MaybeInsertRevertEntry(absl::string_view key, absl::string_view value,
+                              size_t value_begin, size_t value_end,
+                              std::vector<RevertEntry>& revert_entries);
+
+  void MaybeApplyPendingRevert(const ConversionRequest& request) const;
   // Returns true if deletion succeeded.
   bool DeleteEntry(absl::string_view key);
 
@@ -129,8 +149,17 @@ class UserSegmentHistoryRewriter : public RewriterInterface {
   const dictionary::PosMatcher* pos_matcher_;
   const dictionary::PosGroup* pos_group_;
 
-  // Internal LRU cache to store reverted key.
-  storage::LruCache<uint64_t, std::vector<std::string>> revert_cache_;
+  // Internal LRU cache to store feature keys touched by Finish().
+  storage::LruCache<uint64_t, PendingRevert> revert_cache_;
+
+  // Revert() is called on the first Backspace after commit, but at that moment
+  // we still do not know whether the user will erase the whole committed text
+  // or only its tail.  Keep the touched entries pending until surrounding text
+  // is available.
+  //
+  // UserSegmentHistoryRewriter instances can be reconstructed between Revert()
+  // and the next Rewrite(), so this state must not be an instance member.
+  static std::optional<PendingRevert> pending_revert_;
 };
 
 }  // namespace mozc

@@ -1854,6 +1854,23 @@ void UserHistoryPredictor::Insert(
     return;
   }
 
+  Entry revert_entry;
+  if (has_fp) {
+    // Roll back to the entry state before this commit.
+    revert_entry = *entry;
+  } else {
+    // This entry did not exist before this commit.
+    //
+    // After Revert, it must not remain as an active zero-frequency entry.
+    // Such an entry can still participate in prediction chaining even though
+    // the commit itself was reverted.
+    revert_entry.set_key(key);
+    revert_entry.set_value(value);
+    revert_entry.set_removed(true);
+    revert_entry.set_suggestion_freq(0);
+    revert_entry.set_shown_freq(0);
+  }
+
   // `entry` might be reused from the heap, so explicitly clear.
   if (!has_fp) {
     entry->Clear();
@@ -1873,9 +1890,8 @@ void UserHistoryPredictor::Insert(
   }
 
   MaybePopulateInnerSegmentBoundary(request, inner_segment_boundary, *entry);
-
-  revert_entries.entries.emplace_back(key_begin, value_begin, *entry);
-
+  revert_entries.entries.emplace_back(key_begin, value_begin,
+                                      std::move(revert_entry));
   entry->set_last_access_time(last_access_time);
   entry->set_suggestion_freq(entry->suggestion_freq() + 1);
 
