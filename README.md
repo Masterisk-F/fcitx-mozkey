@@ -23,7 +23,7 @@ Main branches
 - 変換確定直後に Backspace で取り消した場合のユーザー履歴学習の扱いを改善
 - Windows 版で左 Shift / 右 Shift / 左 Ctrl / 右 Ctrl を個別キーとして設定画面から割り当て可能
 - Windows 版の候補ウィンドウにダークモード切り替えを追加
-- Windows 版の候補ウィンドウの配色・余白・角丸などの見た目を調整
+- Windows 版の候補ウィンドウや IME 切り替えインジケータの配色・余白・角丸などの見た目を調整
 - 自分の Windows 開発環境向けのビルド調整
 
 Examples

@@ -84,9 +84,9 @@ struct Sprite {
 const UINT_PTR kTimerEventFadeStart = 0;
 const UINT_PTR kTimerEventFading = 1;
 
-constexpr DWORD kStartFadingOutDelay = 2500;  // msec
-constexpr DWORD kFadingOutInterval = 16;      // msec
-constexpr int kFadingOutAlphaDelta = 32;
+constexpr DWORD kStartFadingOutDelay = 850;  // msec
+constexpr DWORD kFadingOutInterval = 16;     // msec
+constexpr int kFadingOutAlphaDelta = 24;
 
 double GetDPIScaling() {
   wil::unique_hdc desktop_dc(::GetDC(nullptr));
@@ -256,44 +256,64 @@ class IndicatorWindow::WindowImpl
 
     info.frame_color = RGBColor(1, 122, 204);
     info.blur_color = RGBColor(1, 122, 204);
-    info.rect_width = ceil(dpi_scaling_ * 45.0);   // snap to pixel alignment
-    info.rect_height = ceil(dpi_scaling_ * 45.0);  // snap to pixel alignment
-    info.corner_radius = dpi_scaling_ * 0.0;
-    info.tail_height = dpi_scaling_ * 5.0;
-    info.tail_width = dpi_scaling_ * 10.0;
-    info.blur_sigma = dpi_scaling_ * 3.0;
-    info.blur_alpha = 0.5;
+    info.rect_width = ceil(dpi_scaling_ * 36.0);
+    info.rect_height = ceil(dpi_scaling_ * 28.0);
+    info.corner_radius = dpi_scaling_ * 8.0;
+    info.tail_height = 0.0;
+    info.tail_width = 0.0;
+    info.blur_sigma = dpi_scaling_ * 4.0;
+    info.blur_alpha = 0.25;
     info.frame_thickness = dpi_scaling_ * 1.0;
-    info.label_size = 13.0;  // no need to be scaled.
-    info.label_color = RGBColor(0, 0, 0);
+    info.label_size = 12.0;
     info.blur_offset_x = 0;
-    info.blur_offset_y = 0;
+    info.blur_offset_y = static_cast<int>(ceil(dpi_scaling_ * 1.0));
 
     switch (mode) {
       case commands::DIRECT:
-        info.blur_sigma = dpi_scaling_ * 0.0;
-        info.frame_color = RGBColor(186, 186, 186);
-        info.label_color = RGBColor(0, 0, 0);
-        info.blur_sigma = dpi_scaling_ * 0.0;
-        info.frame_thickness = dpi_scaling_ * 1.0;
-        info.corner_radius = dpi_scaling_ * 0.0;
-        info.blur_offset_x = 0;
-        info.blur_offset_y = 0;
+        info.inside_color = RGBColor(30, 38, 52);
+        info.frame_color = RGBColor(96, 130, 170);
+        info.blur_color = RGBColor(0, 0, 0);
+        info.label_color = RGBColor(235, 242, 250);
         info.label = "A";
         break;
+
       case commands::HIRAGANA:
+        info.inside_color = RGBColor(20, 64, 61);
+        info.frame_color = RGBColor(70, 190, 180);
+        info.blur_color = RGBColor(0, 0, 0);
+        info.label_color = RGBColor(245, 255, 255);
         info.label = "あ";
         break;
+
       case commands::FULL_KATAKANA:
+        info.inside_color = RGBColor(42, 44, 70);
+        info.frame_color = RGBColor(126, 135, 245);
+        info.blur_color = RGBColor(0, 0, 0);
+        info.label_color = RGBColor(245, 245, 255);
         info.label = "ア";
         break;
+
       case commands::HALF_ASCII:
+        info.inside_color = RGBColor(30, 38, 52);
+        info.frame_color = RGBColor(96, 130, 170);
+        info.blur_color = RGBColor(0, 0, 0);
+        info.label_color = RGBColor(235, 242, 250);
         info.label = "_A";
         break;
+
       case commands::FULL_ASCII:
+        info.inside_color = RGBColor(30, 38, 52);
+        info.frame_color = RGBColor(96, 130, 170);
+        info.blur_color = RGBColor(0, 0, 0);
+        info.label_color = RGBColor(235, 242, 250);
         info.label = "Ａ";
         break;
+
       case commands::HALF_KATAKANA:
+        info.inside_color = RGBColor(42, 44, 70);
+        info.frame_color = RGBColor(126, 135, 245);
+        info.blur_color = RGBColor(0, 0, 0);
+        info.label_color = RGBColor(245, 245, 255);
         info.label = "_ｱ";
         break;
     }
