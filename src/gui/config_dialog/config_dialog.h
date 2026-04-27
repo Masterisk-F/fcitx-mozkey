@@ -83,10 +83,6 @@ class ConfigDialog : public QDialog, private Ui::ConfigDialog {
  private:
   bool GetConfig(config::Config *config);
   bool SetConfig(const config::Config &config);
-  // Set/GetSendStatsChechBox read/write registry or file directly
-  // instead of config protobuf.
-  void SetSendStatsCheckBox();
-  void GetSendStatsCheckBox() const;
   void ConvertToProto(config::Config *config) const;
   void ConvertFromProto(const config::Config &config);
   bool Update();

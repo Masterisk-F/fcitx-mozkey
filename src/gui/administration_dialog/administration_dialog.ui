@@ -78,40 +78,11 @@
     <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
    </property>
   </widget>
-  <widget class="QLabel" name="usageStatsMessage">
-   <property name="geometry">
-    <rect>
-     <x>30</x>
-     <y>10</y>
-     <width>431</width>
-     <height>51</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>Help make [ProductName] better by automatically sending usage statistics and crash reports to Google (changes will take effect after you log out and log back in)</string>
-   </property>
-   <property name="wordWrap">
-    <bool>true</bool>
-   </property>
-  </widget>
-  <widget class="QCheckBox" name="usageStatsCheckBox">
-   <property name="geometry">
-    <rect>
-     <x>10</x>
-     <y>20</y>
-     <width>21</width>
-     <height>21</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string/>
-   </property>
-  </widget>
   <widget class="QCheckBox" name="CacheServiceEnabledcheckBox">
    <property name="geometry">
     <rect>
      <x>10</x>
-     <y>70</y>
+     <y>20</y>
      <width>432</width>
      <height>17</height>
     </rect>
@@ -124,7 +95,7 @@
    <property name="geometry">
     <rect>
      <x>10</x>
-     <y>100</y>
+     <y>50</y>
      <width>451</width>
      <height>17</height>
     </rect>
@@ -141,7 +112,6 @@
   </widget>
  </widget>
  <tabstops>
-  <tabstop>usageStatsCheckBox</tabstop>
   <tabstop>CacheServiceEnabledcheckBox</tabstop>
   <tabstop>ElevatedProcessDisabledcheckBox</tabstop>
   <tabstop>AdministrationDialogbuttonBox</tabstop>

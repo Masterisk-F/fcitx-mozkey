@@ -35,16 +35,11 @@
 
 #ifdef _WIN32
 #include "base/run_level.h"
-#include "config/stats_config_util.h"
 #include "win32/cache_service/cache_service_manager.h"
 #endif  // _WIN32
 
 namespace mozc {
 namespace gui {
-
-#ifdef _WIN32
-using mozc::config::StatsConfigUtil;
-#endif  // _WIN32
 
 AdministrationDialog::AdministrationDialog()
     : dialog_title_(
@@ -58,19 +53,7 @@ AdministrationDialog::AdministrationDialog()
   connect(AdministrationDialogbuttonBox, SIGNAL(clicked(QAbstractButton *)),
           this, SLOT(clicked(QAbstractButton *)));
 
-  // When clicking these messages, CheckBoxs corresponding
-  // to them should be toggled.
-  // We cannot use connect/slot as QLabel doesn't define
-  // clicked slot by default.
-  usageStatsMessage->installEventFilter(this);
-
 #ifdef _WIN32
-
-#ifdef CHANNEL_DEV
-  usageStatsCheckBox->setEnabled(false);
-#endif  // CHANNEL_DEV
-
-  usageStatsCheckBox->setChecked(StatsConfigUtil::IsEnabled());
 
   ElevatedProcessDisabledcheckBox->setChecked(
       RunLevel::GetElevatedProcessDisabled());
@@ -104,15 +87,6 @@ void AdministrationDialog::clicked(QAbstractButton *button) {
   switch (AdministrationDialogbuttonBox->buttonRole(button)) {
     case QDialogButtonBox::ApplyRole:
     case QDialogButtonBox::AcceptRole:
-      if (!StatsConfigUtil::SetEnabled(usageStatsCheckBox->isChecked())) {
-        QMessageBox::critical(
-            this, dialog_title_,
-            tr("Failed to change the configuration of "
-               "usage statistics and crash report. "
-               "Administrator privilege is required to change the "
-               "configuration."));
-      }
-
       if (CanStartService()) {
         bool result = false;
         if (CacheServiceEnabledcheckBox->isChecked()) {
@@ -151,16 +125,5 @@ void AdministrationDialog::clicked(QAbstractButton *button) {
 #endif  // _WIN32
 }
 
-// Catch MouseButtonRelease event to toggle the CheckBoxes
-bool AdministrationDialog::eventFilter(QObject *obj, QEvent *event) {
-  if (event->type() == QEvent::MouseButtonRelease) {
-    if (obj == usageStatsMessage) {
-#ifndef CHANNEL_DEV
-      usageStatsCheckBox->toggle();
-#endif  // CHANNEL_DEV
-    }
-  }
-  return QObject::eventFilter(obj, event);
-}
 }  // namespace gui
 }  // namespace mozc

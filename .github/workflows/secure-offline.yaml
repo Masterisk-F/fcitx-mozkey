@@ -1,0 +1,158 @@
+name: Secure Offline Checks
+
+on:
+  push:
+    branches:
+      - my-product
+      - "feature/**"
+      - "fix/**"
+      - "harden/**"
+      - "chore/**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source_check:
+    name: No-network source check
+    runs-on: windows-2025
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Check prohibited network symbols
+        shell: pwsh
+        run: |
+          python tools\check_no_network_symbols.py
+
+  config_tests:
+    name: Offline config tests
+    runs-on: windows-2025
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Restore update_deps cache
+        uses: actions/cache@v5
+        with:
+          path: src/third_party_cache
+          key: update_deps-${{ runner.os }}-${{ hashFiles('src/build_tools/update_deps.py') }}
+
+      - name: Install dependencies
+        shell: cmd
+        working-directory: .\src
+        run: |
+          python build_tools/update_deps.py
+
+      - name: Run offline config tests
+        shell: cmd
+        working-directory: .\src
+        env:
+          ANDROID_NDK_HOME: ""
+        run: |
+          bazelisk test --config oss_windows --config release_build --test_output=errors //config:stats_config_util_test //config:config_handler_test
+
+  binary_check:
+    name: Binary no-network check
+    runs-on: windows-2025
+    timeout-minutes: 120
+    if: github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          submodules: false
+          persist-credentials: false
+
+      - name: Restore update_deps cache
+        uses: actions/cache@v5
+        with:
+          path: src/third_party_cache
+          key: update_deps-${{ runner.os }}-${{ hashFiles('src/build_tools/update_deps.py') }}
+
+      - name: Install dependencies
+        shell: cmd
+        working-directory: .\src
+        run: |
+          python build_tools/update_deps.py
+
+      - name: Build Qt
+        shell: cmd
+        working-directory: .\src
+        run: |
+          python build_tools/build_qt.py --release --confirm_license
+
+      - name: Delete Qt src to save disk space
+        shell: cmd
+        working-directory: .\src
+        run: |
+          if exist third_party\qt_src rmdir third_party\qt_src /s /q
+
+      - name: Build Windows package
+        shell: cmd
+        working-directory: .\src
+        env:
+          ANDROID_NDK_HOME: ""
+        run: |
+          bazelisk build --config oss_windows --config release_build package
+
+      - name: Check Bazel output network DLL imports
+        shell: pwsh
+        run: |
+          python tools\check_no_network_imports.py --root src\bazel-bin
+
+      - name: Check Bazel output string markers
+        shell: pwsh
+        run: |
+          python tools\check_no_network_strings.py --root src\bazel-bin
+
+      - name: Extract MSI
+        shell: pwsh
+        run: |
+          $extractDir = Join-Path $PWD "msi_extract"
+          Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force $extractDir | Out-Null
+
+          $msi = Resolve-Path "src\bazel-bin\win32\installer\Mozc64.msi"
+
+          & msiexec.exe /a "$msi" /qn TARGETDIR="$extractDir"
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+          Get-ChildItem $extractDir -Recurse -Include "mozc*.exe","mozc*.dll" |
+            Select-Object FullName
+
+      - name: Check MSI-extracted network DLL imports
+        shell: pwsh
+        run: |
+          python tools\check_no_network_imports.py --root msi_extract
+
+      - name: Check MSI-extracted string markers
+        shell: pwsh
+        run: |
+          python tools\check_no_network_strings.py --root msi_extract
+
+      - name: Upload MSI
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mozc64.msi
+          path: src/bazel-bin/win32/installer/Mozc64.msi
+          if-no-files-found: warn

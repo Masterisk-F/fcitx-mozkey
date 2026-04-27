@@ -5,6 +5,69 @@ This repository is my personal fork of [google/mozc](https://github.com/google/m
 
 このリポジトリは [google/mozc](https://github.com/google/mozc) の個人用フォークです。
 
+Privacy / Network Access
+------------------------
+
+This fork is designed to run without network communication from Mozc runtime
+processes during normal IME operation.
+
+The usage-statistics and crash-report option inherited from upstream has been
+removed from the administration and configuration dialogs.
+
+The default `StatsConfigUtil` implementation is fixed to the null implementation
+in this fork, and usage statistics cannot be enabled through the normal runtime
+path.
+
+Windows release binaries are checked so that Mozc runtime executables do not
+import common networking libraries such as `ws2_32.dll`, `winhttp.dll`,
+`wininet.dll`, or `urlmon.dll`.
+
+Additional release checks verify that Mozc runtime binaries do not contain
+hard-deny telemetry, updater, crash-upload, or usage-statistics markers.
+
+Generic URL-like markers such as `http://`, `https://`, and `googleapis.com`
+are reported for audit, but they are not treated as hard failures because they
+can come from manifests, XML namespaces, comments, or library metadata.
+
+Building from source may require network access to download build dependencies.
+This is separate from runtime behavior of the installed IME.
+
+See also:
+
+- [Secure Offline Guarantee](docs/security/offline_guarantee.md)
+- [Secure Offline Release Checklist](docs/security/release_checklist.md)
+
+プライバシー / ネットワークアクセス
+------------------------------------
+
+この fork は、通常の IME 利用時に Mozc の実行時プロセスがネットワーク通信を
+行わない構成を目指しています。
+
+upstream 由来の使用統計・クラッシュレポート送信オプションは、管理ダイアログ
+および設定ダイアログから削除しています。
+
+この fork では `StatsConfigUtil` のデフォルト実装を Null 実装に固定しており、
+通常の実行経路から使用統計を有効化できません。
+
+Windows 向けリリースバイナリについては、`ws2_32.dll`, `winhttp.dll`,
+`wininet.dll`, `urlmon.dll` などの代表的なネットワーク関連 DLL を import
+していないことを検査します。
+
+さらに、リリース時にはテレメトリ、アップデータ、クラッシュアップロード、使用統計
+関連の危険な marker が Mozc 実行時バイナリに含まれないことを確認します。
+
+`http://`, `https://`, `googleapis.com` などの汎用的な URL 風 marker は、
+manifest、XML namespace、コメント、ライブラリ metadata に由来する場合があるため、
+監査用に表示しますが hard failure にはしていません。
+
+ソースからビルドする場合、ビルド依存関係の取得にネットワーク接続が必要になる
+場合があります。これは、インストール済み IME の実行時通信とは別です。
+
+関連ドキュメント:
+
+- [Secure Offline Guarantee](docs/security/offline_guarantee.md)
+- [Secure Offline Release Checklist](docs/security/release_checklist.md)
+
 Download / Install
 ------------------
 
