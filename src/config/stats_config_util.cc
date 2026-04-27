@@ -235,26 +235,20 @@ class AndroidStatsConfigUtilImpl : public StatsConfigUtilInterface {
 class NullStatsConfigUtilImpl : public StatsConfigUtilInterface {
  public:
   bool IsEnabled() override { return false; }
-  bool SetEnabled(bool val) override { return true; }
+
+  bool SetEnabled(bool val) override {
+    // This fork never enables usage statistics or crash-report upload.
+    // Disabling is accepted; enabling is rejected.
+    return !val;
+  }
 };
 
 StatsConfigUtilInterface* g_stats_config_util_handler = nullptr;
 
 // GetStatsConfigUtil and SetHandler are not thread safe.
 
-#if !defined(GOOGLE_JAPANESE_INPUT_BUILD)
-// For non-official build, use null implementation.
+// This fork never enables usage statistics or crash-report upload.
 typedef NullStatsConfigUtilImpl DefaultConfigUtilImpl;
-#elif defined(_WIN32)
-typedef WinStatsConfigUtilImpl DefaultConfigUtilImpl;
-#elif defined(__APPLE__)
-typedef MacStatsConfigUtilImpl DefaultConfigUtilImpl;
-#elif defined(__ANDROID__)
-typedef AndroidStatsConfigUtilImpl DefaultConfigUtilImpl;
-#else   // Platforms
-// Fall back mode.  Use null implementation.
-typedef NullStatsConfigUtilImpl DefaultConfigUtilImpl;
-#endif  // Platforms
 
 StatsConfigUtilInterface& GetStatsConfigUtil() {
   if (g_stats_config_util_handler == nullptr) {

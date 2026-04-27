@@ -44,7 +44,6 @@
 #include "base/config_file_stream.h"
 #include "client/client.h"
 #include "config/config_handler.h"
-#include "config/stats_config_util.h"
 #include "gui/base/util.h"
 #include "gui/config_dialog/keymap_editor.h"
 #include "gui/config_dialog/roman_table_editor.h"
@@ -82,8 +81,6 @@ void Connect(const QList<T *> &objects, const char *signal,
 
 namespace mozc {
 namespace gui {
-
-using ::mozc::config::StatsConfigUtil;
 
 ConfigDialog::ConfigDialog()
     : client_(client::ClientFactory::NewClient()),
@@ -233,8 +230,6 @@ ConfigDialog::ConfigDialog()
                    SLOT(SelectSuggestionSetting(int)));
   QObject::connect(launchAdministrationDialogButton, SIGNAL(clicked()), this,
                    SLOT(LaunchAdministrationDialog()));
-  QObject::connect(launchAdministrationDialogButtonForUsageStats,
-                   SIGNAL(clicked()), this, SLOT(LaunchAdministrationDialog()));
 
   // Event handlers to enable 'Apply' button.
   Connect(findChildren<QPushButton *>(), SIGNAL(clicked()), this,
@@ -252,7 +247,6 @@ ConfigDialog::ConfigDialog()
   // to them should be toggled.
   // We cannot use connect/slot as QLabel doesn't define
   // clicked slot by default.
-  usageStatsMessage->installEventFilter(this);
   incognitoModeMessage->installEventFilter(this);
 
 #ifndef _WIN32
@@ -269,34 +263,15 @@ ConfigDialog::ConfigDialog()
     const QIcon &vista_shield_icon =
         QApplication::style()->standardIcon(QStyle::SP_VistaShield);
     launchAdministrationDialogButton->setIcon(vista_shield_icon);
-    launchAdministrationDialogButtonForUsageStats->setIcon(vista_shield_icon);
   }
 
-  usageStatsCheckBox->setDisabled(true);
-  usageStatsCheckBox->setVisible(false);
-  usageStatsMessage->setDisabled(true);
-  usageStatsMessage->setVisible(false);
 #else   // _WIN32
   launchAdministrationDialogButton->setEnabled(false);
   launchAdministrationDialogButton->setVisible(false);
-  launchAdministrationDialogButtonForUsageStats->setEnabled(false);
-  launchAdministrationDialogButtonForUsageStats->setVisible(false);
   administrationLine->setVisible(false);
   administrationLabel->setVisible(false);
   dictionaryPreloadingAndUACLabel->setVisible(false);
 #endif  // _WIN32
-
-#ifdef __linux__
-  // On Linux, disable all fields for UsageStats
-  usageStatsLabel->setEnabled(false);
-  usageStatsLabel->setVisible(false);
-  usageStatsLine->setEnabled(false);
-  usageStatsLine->setVisible(false);
-  usageStatsMessage->setEnabled(false);
-  usageStatsMessage->setVisible(false);
-  usageStatsCheckBox->setEnabled(false);
-  usageStatsCheckBox->setVisible(false);
-#endif  // __linux__
 
   GuiUtil::ReplaceWidgetLabels(this);
 
@@ -308,9 +283,6 @@ ConfigDialog::ConfigDialog()
   IMEHotKeyDisabledCheckBox->setVisible(false);
 #endif  // _WIN32
 
-#ifdef CHANNEL_DEV
-  usageStatsCheckBox->setEnabled(false);
-#endif  // CHANNEL_DEV
 }
 
 bool ConfigDialog::SetConfig(const config::Config &config) {
@@ -440,24 +412,6 @@ bool ConfigDialog::Update() {
 #endif  // __APPLE__
 
   return true;
-}
-
-void ConfigDialog::SetSendStatsCheckBox() {
-  // On windows, usage_stats flag is managed by
-  // administration_dialog. http://b/2889759
-#ifndef _WIN32
-  const bool val = StatsConfigUtil::IsEnabled();
-  usageStatsCheckBox->setChecked(val);
-#endif  // _WIN32
-}
-
-void ConfigDialog::GetSendStatsCheckBox() const {
-  // On windows, usage_stats flag is managed by
-  // administration_dialog. http://b/2889759
-#ifndef _WIN32
-  const bool val = usageStatsCheckBox->isChecked();
-  StatsConfigUtil::SetEnabled(val);
-#endif  // _WIN32
 }
 
 #define SET_COMBOBOX(combobox, enumname, field)                    \
@@ -610,7 +564,6 @@ void ConfigDialog::ConvertFromProto(const config::Config &config) {
       std::clamp<int>(config.suggestions_size(), 1, 9));
 
   // tab5
-  SetSendStatsCheckBox();
   SET_CHECKBOX(incognitoModeCheckBox, incognito_mode);
   SET_CHECKBOX(presentationModeCheckBox, presentation_mode);
 
@@ -741,7 +694,6 @@ void ConfigDialog::ConvertToProto(config::Config *config) const {
       static_cast<uint32_t>(suggestionsSizeSpinBox->value()));
 
   // tab5
-  GetSendStatsCheckBox();
   GET_CHECKBOX(incognitoModeCheckBox, incognito_mode);
   GET_CHECKBOX(presentationModeCheckBox, presentation_mode);
 
@@ -923,7 +875,6 @@ void ConfigDialog::ResetToDefaults() {
          "The following items are not reset with this operation.\n"
          " - Personalization data\n"
          " - Input history\n"
-         " - Usage statistics and crash reports\n"
          " - Administrator settings")
           .arg(GuiUtil::ProductName());
   if (QMessageBox::Ok ==
@@ -949,11 +900,7 @@ void ConfigDialog::EnableApplyButton() {
 // Catch MouseButtonRelease event to toggle the CheckBoxes
 bool ConfigDialog::eventFilter(QObject *obj, QEvent *event) {
   if (event->type() == QEvent::MouseButtonRelease) {
-    if (obj == usageStatsMessage) {
-#ifndef CHANNEL_DEV
-      usageStatsCheckBox->toggle();
-#endif  // CHANNEL_DEV
-    } else if (obj == incognitoModeMessage) {
+    if (obj == incognitoModeMessage) {
       incognitoModeCheckBox->toggle();
     }
   }

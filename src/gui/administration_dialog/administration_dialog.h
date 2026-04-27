@@ -47,9 +47,6 @@ class AdministrationDialog : public QDialog, private Ui::AdministrationDialog {
  protected slots:
   virtual void clicked(QAbstractButton *button);
 
- protected:
-  bool eventFilter(QObject *obj, QEvent *event) override;
-
  private:
   bool CanStartService();
   QString dialog_title_;

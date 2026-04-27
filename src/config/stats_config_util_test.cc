@@ -696,6 +696,16 @@ TEST(StatsConfigUtilTestLinux, DefaultValueTest) {
 TEST(StatsConfigUtilTestNonOfficialBuild, DefaultValueTest) {
   EXPECT_FALSE(StatsConfigUtil::IsEnabled());
 }
+
+TEST(StatsConfigUtilTestNonOfficialBuild, NeverEnablesUsageStats) {
+  EXPECT_FALSE(StatsConfigUtil::IsEnabled());
+
+  EXPECT_FALSE(StatsConfigUtil::SetEnabled(true));
+  EXPECT_FALSE(StatsConfigUtil::IsEnabled());
+
+  EXPECT_TRUE(StatsConfigUtil::SetEnabled(false));
+  EXPECT_FALSE(StatsConfigUtil::IsEnabled());
+}
 #endif  // GOOGLE_JAPANESE_INPUT_BUILD
 
 }  // namespace config

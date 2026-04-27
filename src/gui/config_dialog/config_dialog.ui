@@ -1166,76 +1166,6 @@
      <attribute name="title">
       <string>Privacy</string>
      </attribute>
-     <widget class="QCheckBox" name="usageStatsCheckBox">
-      <property name="geometry">
-       <rect>
-        <x>30</x>
-        <y>190</y>
-        <width>20</width>
-        <height>20</height>
-       </rect>
-      </property>
-      <property name="sizePolicy">
-       <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
-        <horstretch>0</horstretch>
-        <verstretch>0</verstretch>
-       </sizepolicy>
-      </property>
-      <property name="text">
-       <string/>
-      </property>
-      <property name="tristate">
-       <bool>false</bool>
-      </property>
-     </widget>
-     <widget class="QLabel" name="usageStatsMessage">
-      <property name="geometry">
-       <rect>
-        <x>50</x>
-        <y>180</y>
-        <width>421</width>
-        <height>61</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>Help make [ProductName] better by automatically sending usage statistics and crash reports to Google (changes will take effect after you log out and log back in)</string>
-      </property>
-      <property name="wordWrap">
-       <bool>true</bool>
-      </property>
-     </widget>
-     <widget class="QWidget" name="horizontalLayoutWidget_16">
-      <property name="geometry">
-       <rect>
-        <x>20</x>
-        <y>160</y>
-        <width>461</width>
-        <height>21</height>
-       </rect>
-      </property>
-      <layout class="QHBoxLayout" name="horizontalLayout_18">
-       <item>
-        <widget class="QLabel" name="usageStatsLabel">
-         <property name="text">
-          <string>Usage statistics and crash reports</string>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="Line" name="usageStatsLine">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
-         </property>
-        </widget>
-       </item>
-      </layout>
-     </widget>
      <widget class="QWidget" name="horizontalLayoutWidget_18">
       <property name="geometry">
        <rect>
@@ -1304,31 +1234,6 @@
       </property>
       <property name="wordWrap">
        <bool>true</bool>
-      </property>
-     </widget>
-     <widget class="QPushButton" name="launchAdministrationDialogButtonForUsageStats">
-      <property name="geometry">
-       <rect>
-        <x>320</x>
-        <y>180</y>
-        <width>150</width>
-        <height>25</height>
-       </rect>
-      </property>
-      <property name="minimumSize">
-       <size>
-        <width>150</width>
-        <height>0</height>
-       </size>
-      </property>
-      <property name="maximumSize">
-       <size>
-        <width>150</width>
-        <height>16777215</height>
-       </size>
-      </property>
-      <property name="text">
-       <string>Settings...</string>
       </property>
      </widget>
      <widget class="QCheckBox" name="presentationModeCheckBox">
@@ -1986,8 +1891,6 @@
   <tabstop>suggestionsSizeSpinBox</tabstop>
   <tabstop>incognitoModeCheckBox</tabstop>
   <tabstop>presentationModeCheckBox</tabstop>
-  <tabstop>usageStatsCheckBox</tabstop>
-  <tabstop>launchAdministrationDialogButtonForUsageStats</tabstop>
   <tabstop>checkDefaultCheckBox</tabstop>
   <tabstop>IMEHotKeyDisabledCheckBox</tabstop>
   <tabstop>launchAdministrationDialogButton</tabstop>
