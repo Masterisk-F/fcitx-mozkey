@@ -94,6 +94,13 @@ UINT __stdcall RestoreServiceState(MSIHANDLE msi_handle);
 // you replace the GoogleIMEJaCacheService.exe.
 UINT __stdcall StopCacheService(MSIHANDLE msi_handle);
 
+// Adds outbound Windows Firewall block rules for Mozc runtime executables.
+// This is a best-effort offline hardening action.
+UINT __stdcall InstallMozcFirewallRules(MSIHANDLE msi_handle);
+
+// Removes outbound Windows Firewall block rules for Mozc runtime executables.
+UINT __stdcall RemoveMozcFirewallRules(MSIHANDLE msi_handle);
+
 // Writes omaha's ap value for changing the user's channel.
 UINT __stdcall WriteApValue(MSIHANDLE msi_handle);
 

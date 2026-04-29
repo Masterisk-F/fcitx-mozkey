@@ -91,6 +91,27 @@ python tools\check_no_network_strings.py --root src\bazel-bin
 For release validation, run the same check against installed or MSI-extracted
 runtime binaries.
 
+## Windows Firewall hardening
+
+The Windows installer adds outbound Windows Firewall block rules for Mozc
+runtime executables as an additional offline hardening layer.
+
+The rules target Mozc executable files such as:
+
+- mozc_server.exe
+- mozc_tool.exe
+- mozc_renderer.exe
+- mozc_broker.exe
+- mozc_cache_service.exe
+
+The rules are outbound-only. They are removed during uninstall. Firewall rule
+creation and removal are best-effort operations; installation and uninstall do
+not fail solely because local policy rejects firewall changes.
+
+The TIP DLL is not managed by a firewall rule because Windows Firewall program
+rules are executable-oriented. Instead, TIP DLL network capability is checked by
+source, import, and string audits.
+
 ## Runtime checks
 
 Before publishing a release, install the MSI in a clean Windows VM and confirm

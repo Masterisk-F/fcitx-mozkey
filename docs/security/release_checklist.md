@@ -125,6 +125,57 @@ python tools\check_no_network_strings.py `
   "C:\Program Files (x86)\Mozc\mozc_tip64.dll"
 ```
 
+## Windows Firewall checks
+
+- [ ] Outbound block rules exist for Mozc runtime executables
+
+```powershell
+Get-NetFirewallRule -DisplayName "Mozc Offline - Block *"
+```
+
+- [ ] Firewall rules target Mozc executable paths
+
+```powershell
+Get-NetFirewallRule -DisplayName "Mozc Offline - Block *" |
+  Get-NetFirewallApplicationFilter |
+  Select-Object Program
+```
+
+Expected programs:
+
+```text
+C:\Program Files (x86)\Mozc\mozc_server.exe
+C:\Program Files (x86)\Mozc\mozc_tool.exe
+C:\Program Files (x86)\Mozc\mozc_renderer.exe
+C:\Program Files (x86)\Mozc\mozc_broker.exe
+C:\Program Files (x86)\Mozc\mozc_cache_service.exe
+```
+
+- [ ] Firewall rules are outbound block rules
+
+```powershell
+Get-NetFirewallRule -DisplayName "Mozc Offline - Block *" |
+  Select-Object DisplayName, Direction, Action, Enabled, Profile
+```
+
+Expected values:
+
+```text
+Direction: Outbound
+Action: Block
+Enabled: True
+Profile: Any
+```
+
+- [ ] IME still works with the firewall rules enabled
+- [ ] Uninstall removes Mozc firewall rules
+
+```powershell
+Get-NetFirewallRule -DisplayName "Mozc Offline - Block *" -ErrorAction SilentlyContinue
+```
+
+Expected after uninstall: no rules are returned.
+
 ## Runtime checks
 
 Use a clean Windows VM.
@@ -158,5 +209,6 @@ Recommended tools:
 
 - [ ] README links to `docs/security/offline_guarantee.md`
 - [ ] README links to `docs/security/release_checklist.md`
+- [ ] README states that Windows installer adds outbound firewall block rules for Mozc runtime executables
 - [ ] Release notes state that offline behavior means runtime behavior, not build-time dependency fetching
 - [ ] Release notes state that local data protection requires OS-level disk encryption for stronger protection

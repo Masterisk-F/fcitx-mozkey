@@ -189,6 +189,9 @@
     <CustomAction Id="SaveCustomActionData" DllEntry="SaveCustomActionData" BinaryRef="mozc_installer_helper.dll" />
     <CustomAction Id="RestoreServiceState" DllEntry="RestoreServiceState" Impersonate="no" Execute="deferred" Return="ignore" BinaryRef="mozc_installer_helper.dll" />
     <CustomAction Id="StopCacheServiceForRollback" DllEntry="StopCacheService" Impersonate="no" Execute="rollback" Return="ignore" BinaryRef="mozc_installer_helper.dll" />
+    <CustomAction Id="InstallMozcFirewallRules" DllEntry="InstallMozcFirewallRules" Execute="deferred" Impersonate="no" Return="ignore" BinaryRef="mozc_installer_helper.dll" />
+    <CustomAction Id="InstallMozcFirewallRulesRollback" DllEntry="RemoveMozcFirewallRules" Execute="rollback" Impersonate="no" Return="ignore" BinaryRef="mozc_installer_helper.dll" />
+    <CustomAction Id="RemoveMozcFirewallRules" DllEntry="RemoveMozcFirewallRules" Execute="deferred" Impersonate="no" Return="ignore" BinaryRef="mozc_installer_helper.dll" />
     <CustomAction Id="NewerVersionError" Error="4000" />
 
     <InstallExecuteSequence>
@@ -201,6 +204,7 @@
       <!-- This action invoked only when removal of the old product failed. -->
       <Custom Action="UnregisterTIPRollback64" After="RestoreUserIMEEnvironment" Condition="(REMOVE=&quot;ALL&quot;) AND UPGRADINGPRODUCTCODE AND (VersionNT64)" />
       <Custom Action="UnregisterTIP64" After="UnregisterTIPRollback64" Condition="(REMOVE=&quot;ALL&quot;) AND (NOT UPGRADINGPRODUCTCODE) AND (VersionNT64)" />
+      <Custom Action="RemoveMozcFirewallRules" After="UnregisterTIP64" Condition="(REMOVE=&quot;ALL&quot;)" />
       <!--
         The InstallValidate action notifies the user
         if mozc_server.exe and mozc_renderer.exe
@@ -230,7 +234,9 @@
       -->
       <Custom Action="RegisterTIPRollback64" Before="RegisterTIP64" Condition="(NOT (REMOVE=&quot;ALL&quot;)) AND (VersionNT64) AND (NOT UPGRADING)" />
       <Custom Action="RegisterTIP64" Before="EnsureAllApplicationPackagesPermisssions" Condition="(NOT (REMOVE=&quot;ALL&quot;)) AND (VersionNT64)" />
-      <Custom Action="EnsureAllApplicationPackagesPermisssions" Before="InitialInstallationCommit" Condition="(NOT (REMOVE=&quot;ALL&quot;))" />
+      <Custom Action="EnsureAllApplicationPackagesPermisssions" Before="InstallMozcFirewallRulesRollback" Condition="(NOT (REMOVE=&quot;ALL&quot;))" />
+      <Custom Action="InstallMozcFirewallRulesRollback" Before="InstallMozcFirewallRules" Condition="(NOT (REMOVE=&quot;ALL&quot;))" />
+      <Custom Action="InstallMozcFirewallRules" Before="InitialInstallationCommit" Condition="(NOT (REMOVE=&quot;ALL&quot;))" />
       <Custom Action="InitialInstallationCommit" Before="FixupConfigFilePermission" Condition="(NOT (REMOVE=&quot;ALL&quot;)) AND (NOT UPGRADING)" />
       <Custom Action="FixupConfigFilePermission" Before="EnableTipProfile" Condition="NOT (REMOVE=&quot;ALL&quot;)" />
       <Custom Action="EnableTipProfile" Before="InstallFinalize" Condition="(NOT (REMOVE=&quot;ALL&quot;)) AND (NOT UPGRADING)" />
