@@ -107,6 +107,7 @@ Main branches
 - 変換確定直後に Backspace で取り消した場合のユーザー履歴学習の扱いを改善
 - Windows 版で左 Shift / 右 Shift / 左 Ctrl / 右 Ctrl を個別キーとして設定画面から割り当て可能
 - Windows 版の候補ウィンドウにダークモード切り替えを追加
+- Windows 版で未確定文字の文字色・背景色・下線色を設定画面からカスタマイズ可能
 - Windows 版の候補ウィンドウや IME 切り替えインジケータの配色・余白・角丸などの見た目を調整
 - 自分の Windows 開発環境向けのビルド調整
 
@@ -252,6 +253,32 @@ The dark theme also adjusts the candidate window appearance, including colors, s
 Windows 版では、設定画面から候補ウィンドウの通常テーマとダークテーマを切り替えられます。
 
 ダークテーマでは配色だけでなく、余白、角丸、フッター表示なども調整し、候補ウィンドウ全体の見た目をよりモダンにしています。
+
+### Windows preedit display colors
+
+On Windows, preedit display colors can be customized from the config dialog.
+
+The following display attributes can be configured separately for input text and the converting segment:
+
+- Text color
+- Background color
+- Underline color
+
+This is intended to improve the visibility of uncommitted text, especially for users who need stronger visual contrast while composing or converting Japanese text.
+
+The setting is applied through Windows TSF display attributes. It works only in applications that honor those attributes. Some applications, including Chrome and Edge, may ignore them.
+
+Windows 版では、設定画面から未確定文字の表示色をカスタマイズできます。
+
+入力中の文字と変換中の文節について、それぞれ以下を個別に設定できます。
+
+- 文字色
+- 背景色
+- 下線色
+
+日本語入力中・変換中の未確定文字を見やすくするための機能です。特に、視認性を高めたいユーザー向けのアクセシビリティ改善として追加しています。
+
+この設定は Windows TSF の表示属性として反映されます。対応アプリでのみ有効です。Chrome や Edge など、一部のアプリでは反映されない場合があります。
 
 Note
 ----
