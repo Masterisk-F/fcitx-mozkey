@@ -45,6 +45,7 @@
 #include <cstddef>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "absl/strings/str_cat.h"
@@ -192,6 +193,122 @@ bool WriteOmahaError(const wchar_t (&function)[num_elements], int line) {
 // This message will be displayed by Omaha meta installer on the error
 // dialog.
 #define LOG_ERROR_FOR_OMAHA() WriteOmahaError(_T(__FUNCTION__), __LINE__)
+
+std::wstring QuoteCommandLineArg(std::wstring_view arg) {
+  std::wstring result;
+  result.reserve(arg.size() + 2);
+  result.push_back(L'"');
+
+  size_t backslash_count = 0;
+  for (const wchar_t ch : arg) {
+    if (ch == L'\\') {
+      ++backslash_count;
+      continue;
+    }
+
+    if (ch == L'"') {
+      result.append(backslash_count * 2 + 1, L'\\');
+      result.push_back(ch);
+      backslash_count = 0;
+      continue;
+    }
+
+    result.append(backslash_count, L'\\');
+    backslash_count = 0;
+    result.push_back(ch);
+  }
+
+  result.append(backslash_count * 2, L'\\');
+  result.push_back(L'"');
+  return result;
+}
+
+std::wstring GetSystemNetshPath() {
+  wchar_t system_dir[MAX_PATH] = {};
+  const UINT length = ::GetSystemDirectoryW(system_dir, std::size(system_dir));
+  if (length == 0 || length >= std::size(system_dir)) {
+    return L"netsh.exe";
+  }
+  return ::mozc::win32::StrCatW(system_dir, L"\\netsh.exe");
+}
+
+bool RunNetshCommand(const std::vector<std::wstring>& args) {
+  std::wstring command_line = QuoteCommandLineArg(GetSystemNetshPath());
+  for (const std::wstring& arg : args) {
+    command_line.push_back(L' ');
+    command_line.append(QuoteCommandLineArg(arg));
+  }
+
+  std::vector<wchar_t> mutable_command_line(command_line.begin(),
+                                            command_line.end());
+  mutable_command_line.push_back(L'\0');
+
+  STARTUPINFOW startup_info = {};
+  startup_info.cb = sizeof(startup_info);
+
+  PROCESS_INFORMATION process_info = {};
+
+  if (!::CreateProcessW(nullptr, mutable_command_line.data(), nullptr, nullptr,
+                        FALSE, CREATE_NO_WINDOW, nullptr, nullptr,
+                        &startup_info, &process_info)) {
+    return false;
+  }
+
+  ::WaitForSingleObject(process_info.hProcess, INFINITE);
+
+  DWORD exit_code = 1;
+  const bool got_exit_code =
+      ::GetExitCodeProcess(process_info.hProcess, &exit_code) != FALSE;
+
+  ::CloseHandle(process_info.hThread);
+  ::CloseHandle(process_info.hProcess);
+
+  return got_exit_code && exit_code == 0;
+}
+
+struct MozcFirewallRule {
+  const wchar_t* name;
+  const char* filename;
+};
+
+constexpr MozcFirewallRule kMozcOfflineFirewallRules[] = {
+    {L"Mozc Offline - Block mozc_server outbound", "mozc_server.exe"},
+    {L"Mozc Offline - Block mozc_tool outbound", "mozc_tool.exe"},
+    {L"Mozc Offline - Block mozc_renderer outbound", "mozc_renderer.exe"},
+    {L"Mozc Offline - Block mozc_broker outbound", "mozc_broker.exe"},
+    {L"Mozc Offline - Block mozc_cache_service outbound",
+     "mozc_cache_service.exe"},
+};
+
+void DeleteFirewallRule(std::wstring_view rule_name) {
+  // Ignore failures. The rule may not exist yet.
+  RunNetshCommand({
+      L"advfirewall",
+      L"firewall",
+      L"delete",
+      L"rule",
+      ::mozc::win32::StrCatW(L"name=", rule_name),
+  });
+}
+
+void AddFirewallRule(std::wstring_view rule_name, std::wstring_view program) {
+  // Make the operation idempotent. This avoids duplicate rules after repair or
+  // upgrade.
+  DeleteFirewallRule(rule_name);
+
+  RunNetshCommand({
+      L"advfirewall",
+      L"firewall",
+      L"add",
+      L"rule",
+      ::mozc::win32::StrCatW(L"name=", rule_name),
+      L"dir=out",
+      L"action=block",
+      ::mozc::win32::StrCatW(L"program=", program),
+      L"enable=yes",
+      L"profile=any",
+  });
+}
 
 }  // namespace
 
@@ -413,6 +530,31 @@ UINT __stdcall StopCacheService(MSIHANDLE msi_handle) {
     return ERROR_INSTALL_FAILURE;
   }
 
+  return ERROR_SUCCESS;
+}
+
+// [Return='ignore']
+UINT __stdcall InstallMozcFirewallRules(MSIHANDLE msi_handle) {
+  DEBUG_BREAK_FOR_DEBUGGER();
+
+  for (const MozcFirewallRule& rule : kMozcOfflineFirewallRules) {
+    AddFirewallRule(rule.name, GetMozcComponentPath(rule.filename));
+  }
+
+  // Firewall rule installation is best-effort. Do not block MSI installation
+  // when enterprise policy or local security settings reject rule creation.
+  return ERROR_SUCCESS;
+}
+
+// [Return='ignore']
+UINT __stdcall RemoveMozcFirewallRules(MSIHANDLE msi_handle) {
+  DEBUG_BREAK_FOR_DEBUGGER();
+
+  for (const MozcFirewallRule& rule : kMozcOfflineFirewallRules) {
+    DeleteFirewallRule(rule.name);
+  }
+
+  // Firewall rule removal is best-effort. Do not block MSI uninstall.
   return ERROR_SUCCESS;
 }
 
