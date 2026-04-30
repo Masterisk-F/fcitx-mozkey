@@ -654,11 +654,6 @@
         <height>351</height>
        </rect>
       </property>
-      <property name="styleSheet">
-       <string notr="true">QScrollArea#inputSupportScrollArea { background-color: palette(window); border: 0px; }
-QScrollArea#inputSupportScrollArea &gt; QWidget { background-color: palette(window); }
-QWidget#inputSupportScrollAreaWidgetContents { background-color: palette(window); }</string>
-      </property>
       <property name="frameShape">
        <enum>QFrame::NoFrame</enum>
       </property>
@@ -676,9 +671,6 @@ QWidget#inputSupportScrollAreaWidgetContents { background-color: palette(window)
          <width>485</width>
          <height>630</height>
         </rect>
-       </property>
-       <property name="styleSheet">
-        <string notr="true">QWidget#inputSupportScrollAreaWidgetContents { background-color: palette(window); }</string>
        </property>
        <widget class="QWidget" name="horizontalLayoutWidget_2">
         <property name="geometry">

@@ -106,31 +106,36 @@ ConfigDialog::ConfigDialog()
       initial_use_dark_mode_candidate_window_(false) {
   setupUi(this);
 
-  // QScrollArea uses QPalette::Base for its viewport by default. In this
-  // dialog it can become black while the original settings tabs use a gray
-  // surface. Force the scroll area's viewport and content widget to match
-  // the existing tab background color.
-  const QString input_support_background = QStringLiteral("#4b4b4b");
-  const QString input_support_background_style =
-      QString("background-color: %1;").arg(input_support_background);
+  // QScrollArea has its own viewport, and the viewport may paint a different
+  // background from ordinary tab pages.  Do not paint it with a palette color
+  // and do not use stylesheets here, because stylesheets can interfere with
+  // native QCheckBox and QFrame line rendering.  Make only the scroll area
+  // surface transparent so the underlying tab page paints the background.
+  inputSupportScrollArea->setFrameShape(QFrame::NoFrame);
 
-  inputSupportScrollArea->setStyleSheet(
-      QString("QScrollArea#inputSupportScrollArea {"
-              " background-color: %1;"
-              " border: 0px;"
-              " }"
-              "QScrollArea#inputSupportScrollArea > QWidget {"
-              " background-color: %1;"
-              " }"
-              "QWidget#inputSupportScrollAreaWidgetContents {"
-              " background-color: %1;"
-              " }")
-          .arg(input_support_background));
+  inputSupportScrollArea->setAutoFillBackground(false);
+  inputSupportScrollArea->viewport()->setAutoFillBackground(false);
+  inputSupportScrollAreaWidgetContents->setAutoFillBackground(false);
 
-  inputSupportScrollArea->viewport()->setStyleSheet(
-      input_support_background_style);
-  inputSupportScrollAreaWidgetContents->setStyleSheet(
-      input_support_background_style);
+  inputSupportScrollArea->setAttribute(Qt::WA_StyledBackground, false);
+  inputSupportScrollArea->viewport()->setAttribute(Qt::WA_StyledBackground,
+                                                   false);
+  inputSupportScrollAreaWidgetContents->setAttribute(Qt::WA_StyledBackground,
+                                                     false);
+
+  inputSupportScrollArea->viewport()->setAttribute(
+      Qt::WA_TranslucentBackground, true);
+  inputSupportScrollAreaWidgetContents->setAttribute(
+      Qt::WA_TranslucentBackground, true);
+
+  inputSupportScrollArea->viewport()->setAttribute(Qt::WA_NoSystemBackground,
+                                                   true);
+  inputSupportScrollAreaWidgetContents->setAttribute(
+      Qt::WA_NoSystemBackground, true);
+
+  inputSupportScrollArea->setStyleSheet(QString());
+  inputSupportScrollArea->viewport()->setStyleSheet(QString());
+  inputSupportScrollAreaWidgetContents->setStyleSheet(QString());
 
   setWindowFlags(Qt::WindowSystemMenuHint | Qt::WindowCloseButtonHint);
   setWindowModality(Qt::NonModal);
