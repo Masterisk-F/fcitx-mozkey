@@ -314,6 +314,11 @@ message Config {
   // using Henkan key as IME_ON.
   repeated SessionKeymap overlay_keymaps = 68 [packed = true];
 
+  // Use live conversion.
+  // If this is true, the current composition is converted on every character
+  // input without committing the previous live conversion result.
+  optional bool use_live_conversion = 69 [default = false];
+
   //////////////////////////////////////////////////////////////
   //
   // Dictionary (80-99)

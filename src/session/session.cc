@@ -72,6 +72,29 @@ using ::mozc::engine::EngineConverterInterface;
 // Maximum size of multiple undo stack.
 const size_t kMultipleUndoMaxSize = 10;
 
+bool IsPlainBackspaceKey(const commands::KeyEvent& key) {
+  return key.has_special_key() &&
+         key.special_key() == commands::KeyEvent::BACKSPACE &&
+         key.modifier_keys_size() == 0;
+}
+
+void ExtractPreeditKeyAndValue(const commands::Preedit& preedit,
+                               std::string* key,
+                               std::string* value) {
+  key->clear();
+  value->clear();
+
+  for (int i = 0; i < preedit.segment_size(); ++i) {
+    const commands::Preedit::Segment& segment = preedit.segment(i);
+    value->append(segment.value());
+    if (segment.has_key() && !segment.key().empty()) {
+      key->append(segment.key());
+    } else {
+      key->append(segment.value());
+    }
+  }
+}
+
 // Set input mode if the current input mode is not the given mode.
 void SwitchInputMode(const transliteration::TransliterationType mode,
                      composer::Composer* composer) {
@@ -427,6 +450,10 @@ bool Session::SendCommand(commands::Command* command) {
       result = DoNothing(command);
       break;
   }
+  if (context_->state() != ImeContext::CONVERSION) {
+    live_conversion_active_ = false;
+  }
+
   MaybeSetUndoStatus(command);
   return result;
 }
@@ -560,6 +587,10 @@ bool Session::SendKey(commands::Command* command) {
     case ImeContext::NONE:
       result = false;
       break;
+  }
+
+  if (context_->state() != ImeContext::CONVERSION) {
+    live_conversion_active_ = false;
   }
 
   MaybeSetUndoStatus(command);
@@ -886,6 +917,21 @@ bool Session::SendKeyConversionState(commands::Command* command) {
 
   if (!result) {
     return DoNothing(command);
+  }
+
+  if (live_conversion_active_) {
+    // During live conversion, Backspace should edit the underlying
+    // composition instead of cancelling conversion.
+    if (IsPlainBackspaceKey(command->input().key())) {
+      return Backspace(command);
+    }
+
+    // Explicit conversion operations such as Space, Enter, candidate movement,
+    // or Cancel promote live conversion back to normal conversion behavior.
+    if (key_command != keymap::ConversionState::INSERT_CHARACTER) {
+      live_conversion_active_ = false;
+      context_->mutable_converter()->SetCandidateListVisible(true);
+    }
   }
 
   switch (key_command) {
@@ -1487,6 +1533,101 @@ bool Session::MaybeSelectCandidate(commands::Command* command) {
   return context_->mutable_converter()->CandidateMoveToShortcut(shortcut);
 }
 
+void Session::CancelLiveConversionForEditing() {
+  if (!live_conversion_active_) {
+    return;
+  }
+
+  live_conversion_active_ = false;
+  SetSessionState(ImeContext::COMPOSITION, context_.get());
+  context_->mutable_converter()->Cancel();
+}
+
+bool Session::MaybeStartLiveConversion(commands::Command* command) {
+  if (!context_->GetConfig().use_live_conversion()) {
+    return false;
+  }
+
+  if (context_->state() != ImeContext::COMPOSITION) {
+    return false;
+  }
+
+  if (context_->composer().GetInputFieldType() == commands::Context::PASSWORD) {
+    return false;
+  }
+
+  const transliteration::TransliterationType input_mode =
+      context_->composer().GetInputMode();
+  if (input_mode == transliteration::HALF_ASCII ||
+      input_mode == transliteration::FULL_ASCII) {
+    return false;
+  }
+
+  const size_t length = context_->composer().GetLength();
+  if (length == 0 || length != context_->composer().GetCursor()) {
+    return false;
+  }
+
+  if (!context_->mutable_converter()->Convert(context_->composer())) {
+    OutputComposition(command);
+    return true;
+  }
+
+  SetSessionState(ImeContext::CONVERSION, context_.get());
+  live_conversion_active_ = true;
+
+  // Keep the candidate list visible internally so that the Windows renderer is
+  // updated.  The actual candidate windows are hidden in WindowManager when
+  // output.live_conversion() is true.
+  context_->mutable_converter()->SetCandidateListVisible(true);
+
+  Output(command);
+  command->mutable_output()->set_live_conversion(true);
+
+  if (command->output().has_preedit()) {
+    ExtractPreeditKeyAndValue(command->output().preedit(),
+                              &live_conversion_key_,
+                              &live_conversion_value_);
+  } else {
+    live_conversion_key_ = context_->composer().GetQueryForConversion();
+    live_conversion_value_ = context_->composer().GetStringForSubmission();
+  }
+
+  return true;
+}
+
+bool Session::CommitLiveConversionResult(commands::Command* command) {
+  if (context_->state() != ImeContext::COMPOSITION) {
+    return false;
+  }
+
+  if (live_conversion_value_.empty()) {
+    CommitCompositionDirectly(command);
+    return true;
+  }
+
+  const size_t length = context_->composer().GetLength();
+  if (length == 0) {
+    CommitCompositionDirectly(command);
+    return true;
+  }
+
+  const std::string preedit = context_->composer().GetStringForPreedit();
+  const std::string last_char(
+      Util::Utf8SubString(preedit, length - 1, 1));
+
+  std::string key = context_->composer().GetQueryForConversion();
+  std::string value = live_conversion_value_;
+  value.append(last_char);
+
+  live_conversion_active_ = false;
+  live_conversion_key_.clear();
+  live_conversion_value_.clear();
+
+  CommitStringDirectly(key, value, command);
+  return true;
+}
+
 void Session::set_client_capability(commands::Capability capability) {
   *context_->mutable_client_capability() = std::move(capability);
 }
@@ -1547,6 +1688,13 @@ bool Session::InsertCharacter(commands::Command* command) {
 
   command->mutable_output()->set_consumed(true);
 
+  const bool was_live_conversion = live_conversion_active_;
+
+  // If the current conversion was started by live conversion, ordinary
+  // character input should continue editing the composition.  So cancel
+  // the temporary conversion before handling candidate shortcuts.
+  CancelLiveConversionForEditing();
+
   // Handle shortcut keys selecting a candidate from a list.
   if (MaybeSelectCandidate(command)) {
     Output(command);
@@ -1579,6 +1727,9 @@ bool Session::InsertCharacter(commands::Command* command) {
   ClearUndoContext();
 
   if (CanDirectCommitAfterPunctuation(key)) {
+    if (was_live_conversion && CommitLiveConversionResult(command)) {
+      return true;
+    }
     CommitCompositionDirectly(command);
     return true;
   }
@@ -1595,6 +1746,10 @@ bool Session::InsertCharacter(commands::Command* command) {
   SetSessionState(ImeContext::COMPOSITION, context_.get());
   if (CanStartAutoConversion(key)) {
     return Convert(command);
+  }
+
+  if (MaybeStartLiveConversion(command)) {
+    return true;
   }
 
   if (Suggest(command->input())) {
@@ -2583,11 +2738,14 @@ bool Session::MoveCursorToBeginning(commands::Command* command) {
 
 bool Session::Delete(commands::Command* command) {
   command->mutable_output()->set_consumed(true);
+  CancelLiveConversionForEditing();
   context_->mutable_composer()->Delete();
   ClearUndoContext();
   if (context_->mutable_composer()->Empty()) {
     SetStateToPredompositionAndCancel(context_.get());
     Output(command);
+  } else if (MaybeStartLiveConversion(command)) {
+    return true;
   } else if (Suggest(command->input())) {
     Output(command);
   } else {
@@ -2598,11 +2756,14 @@ bool Session::Delete(commands::Command* command) {
 
 bool Session::Backspace(commands::Command* command) {
   command->mutable_output()->set_consumed(true);
+  CancelLiveConversionForEditing();
   context_->mutable_composer()->Backspace();
   ClearUndoContext();
   if (context_->mutable_composer()->Empty()) {
     SetStateToPredompositionAndCancel(context_.get());
     Output(command);
+  } else if (MaybeStartLiveConversion(command)) {
+    return true;
   } else if (Suggest(command->input())) {
     Output(command);
   } else {

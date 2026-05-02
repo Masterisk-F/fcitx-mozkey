@@ -221,6 +221,21 @@ mozc_cc_library(
 )
 
 mozc_cc_library(
+    name = "ruby_window",
+    srcs = ["ruby_window.cc"],
+    hdrs = ["ruby_window.h"],
+    tags = MOZC_TAGS.WIN_ONLY,
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [
+        "//base/win32:wide_char",
+        "//bazel/win32:gdi32",
+        "//bazel/win32:user32",
+        "//protocol:commands_cc_proto",
+        "//protocol:renderer_cc_proto",
+    ],
+)
+
+mozc_cc_library(
     name = "infolist_window",
     srcs = ["infolist_window.cc"],
     hdrs = ["infolist_window.h"],
@@ -253,6 +268,7 @@ mozc_cc_library(
         ":candidate_window",
         ":indicator_window",
         ":infolist_window",
+        ":ruby_window",
         ":win32_dpi_util",
         ":win32_renderer_util",
         "//base:coordinates",

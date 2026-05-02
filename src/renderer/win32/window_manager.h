@@ -39,6 +39,7 @@
 #include "renderer/win32/candidate_window.h"
 #include "renderer/win32/indicator_window.h"
 #include "renderer/win32/infolist_window.h"
+#include "renderer/win32/ruby_window.h"
 #include "renderer/win32/win32_renderer_util.h"
 
 namespace mozc {
@@ -68,6 +69,7 @@ class WindowManager {
   std::unique_ptr<CandidateWindow> cascading_window_;
   std::unique_ptr<IndicatorWindow> indicator_window_;
   std::unique_ptr<InfolistWindow> infolist_window_;
+  std::unique_ptr<RubyWindow> ruby_window_;
   std::unique_ptr<LayoutManager> layout_manager_;
   client::SendCommandInterface* send_command_interface_;
   POINT last_position_;
