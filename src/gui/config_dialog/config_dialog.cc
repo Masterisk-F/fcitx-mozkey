@@ -749,6 +749,7 @@ void ConfigDialog::ConvertFromProto(const config::Config &config) {
   // tab3
   SET_CHECKBOX(autoSwitchCompositionMode, auto_switch_composition_mode);
 
+  SET_CHECKBOX(liveConversionCheckBox, use_live_conversion);
   SET_CHECKBOX(useAutoConversion, use_auto_conversion);
   kutenCheckBox->setChecked(config.auto_conversion_key() &
                             config::Config::AUTO_CONVERSION_KUTEN);
@@ -904,6 +905,7 @@ void ConfigDialog::ConvertToProto(config::Config *config) const {
   // tab3
   GET_CHECKBOX(autoSwitchCompositionMode, auto_switch_composition_mode);
 
+  GET_CHECKBOX(liveConversionCheckBox, use_live_conversion);
   GET_CHECKBOX(useAutoConversion, use_auto_conversion);
   GET_CHECKBOX(useDirectCommit, use_direct_commit);
   GET_CHECKBOX(useJapaneseLayout, use_japanese_layout);

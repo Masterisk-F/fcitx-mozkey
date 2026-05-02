@@ -64,6 +64,7 @@ WindowManager::WindowManager()
       cascading_window_(std::make_unique<CandidateWindow>()),
       indicator_window_(std::make_unique<IndicatorWindow>()),
       infolist_window_(std::make_unique<InfolistWindow>()),
+      ruby_window_(std::make_unique<RubyWindow>()),
       layout_manager_(std::make_unique<LayoutManager>()),
       send_command_interface_(nullptr),
       last_position_(kInvalidMousePosition),
@@ -84,18 +85,21 @@ void WindowManager::Initialize() {
   indicator_window_->Initialize();
   infolist_window_->Create(nullptr);
   infolist_window_->ShowWindow(SW_HIDE);
+  ruby_window_->Initialize();
 }
 
 void WindowManager::AsyncHideAllWindows() {
   cascading_window_->ShowWindowAsync(SW_HIDE);
   main_window_->ShowWindowAsync(SW_HIDE);
   infolist_window_->ShowWindowAsync(SW_HIDE);
+  ruby_window_->Hide();
 }
 
 void WindowManager::AsyncQuitAllWindows() {
   cascading_window_->PostMessage(WM_CLOSE, 0, 0);
   main_window_->PostMessage(WM_CLOSE, 0, 0);
   infolist_window_->PostMessage(WM_CLOSE, 0, 0);
+  ruby_window_->Destroy();
 }
 
 void WindowManager::DestroyAllWindows() {
@@ -109,6 +113,7 @@ void WindowManager::DestroyAllWindows() {
   if (infolist_window_->IsWindow()) {
     infolist_window_->DestroyWindow();
   }
+  ruby_window_->Destroy();
 }
 
 void WindowManager::HideAllWindows() {
@@ -116,6 +121,7 @@ void WindowManager::HideAllWindows() {
   cascading_window_->ShowWindow(SW_HIDE);
   indicator_window_->Hide();
   infolist_window_->DelayHide(0);
+  ruby_window_->Hide();
 }
 
 // TODO(yukawa): Refactor this method by making a new method in LayoutManager
@@ -130,6 +136,7 @@ void WindowManager::UpdateLayout(const commands::RendererCommand& command) {
     main_window_->ShowWindow(SW_HIDE);
     indicator_window_->Hide();
     infolist_window_->DelayHide(0);
+    ruby_window_->Hide();
     return;
   }
 
@@ -137,6 +144,16 @@ void WindowManager::UpdateLayout(const commands::RendererCommand& command) {
   // for all |RendererCommand::UPDATE| renderer messages.
   DCHECK(command.has_output());
   const commands::Output& output = command.output();
+
+  ruby_window_->OnUpdate(command);
+
+  if (output.live_conversion()) {
+    cascading_window_->ShowWindow(SW_HIDE);
+    main_window_->ShowWindow(SW_HIDE);
+    indicator_window_->Hide();
+    infolist_window_->DelayHide(0);
+    return;
+  }
 
   // We assume |application_info| exists in the renderer command
   // for all |RendererCommand::UPDATE| renderer messages.

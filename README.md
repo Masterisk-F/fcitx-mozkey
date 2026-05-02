@@ -81,8 +81,8 @@ Download / Install
 
 Windows 用のビルド済み MSI は [Releases](https://github.com/koyasi777/mozc/releases) からダウンロードできます。
 
-- 通常の 64-bit Windows では `Mozc64_myproduct_v0.3.2_offline_x64.msi` を使用してください。
-- 初回リリースは pre-release として公開しています。
+- 通常の 64-bit Windows では `Mozc64_myproduct_v0.4.0_offline_x64.msi` を使用してください。
+- 本 fork のリリースは個人用の experimental build として公開しています。
 
 > [!WARNING]
 > このビルドは google/mozc の公式配布物ではありません。
@@ -105,6 +105,8 @@ Main branches
 - 単打確定の対象を設定画面のチェックボックスで選択可能
 - 句読点変換と句読点・記号の単打確定は排他的に動作
 - 変換確定直後に Backspace や Cancel キーで取り消した場合のユーザー履歴学習の扱いを改善
+- ライブ変換機能を追加。未確定文字列を文字入力ごとに自動変換し、確定前の読みをルビ風 overlay で表示可能
+- ライブ変換は設定画面から ON/OFF 切り替え可能
 - Windows 版で左 Shift / 右 Shift / 左 Ctrl / 右 Ctrl を個別キーとして設定画面から割り当て可能
 - Windows 版の候補ウィンドウにダークモード切り替えを追加
 - Windows 版で未確定文字の文字色・背景色・下線色を設定画面からカスタマイズ可能
@@ -154,6 +156,36 @@ while valid longer rules such as `ctnnr` and `ctnnc` still work.
 のような規則がある場合、`ctnnaru` は `ctn + naru` として解釈され、`ことになる` になります。
 一方で、`ctnnr` や `ctnnc` のように長い規則として成立する入力は、従来どおりその規則が使われます。
 
+### Live conversion
+
+With live conversion enabled, Mozc converts the current composition after each character input without committing it immediately.
+
+For example:
+
+- Type `kyouha`
+- The preedit can be shown as `今日は` before pressing Space
+- Typing more characters continues updating the same uncommitted composition
+- Pressing Enter commits the current live conversion result
+
+During live conversion, this fork shows a small ruby-like overlay window above the preedit text so that the original reading remains visible while the converted text is shown.
+
+The live conversion feature can be enabled or disabled from the config dialog.
+
+### ライブ変換
+
+ライブ変換を有効にすると、スペースキーを押さなくても、入力中の未確定文字列が文字入力ごとに自動で変換されます。
+
+たとえば:
+
+- `kyouha` と入力
+- Space を押す前に、未確定文字列が `今日は` のように表示される
+- 続けて文字を入力しても途中の変換結果は確定されず、同じ未確定文字列として再変換される
+- Enter で現在のライブ変換結果を確定する
+
+ライブ変換中は、変換後の文字を表示しながら元の読みも分かるように、未確定文字の上付近に Mozc 独自のルビ風 overlay window を表示します。
+
+ライブ変換は設定画面から ON/OFF を切り替えられます。
+
 ### Direct commit for punctuations/symbols
 
 With the direct-commit option enabled, configured punctuations/symbols are committed immediately.
@@ -177,6 +209,10 @@ You can choose which punctuations/symbols are committed directly in the config d
 のように動作します。
 
 どの句読点・記号を単打確定の対象にするかは、設定画面のチェックボックスで選択できます。
+
+When live conversion is enabled, direct-commit punctuations/symbols commit the currently displayed live conversion result instead of committing the raw kana composition.
+
+ライブ変換が有効な場合、句読点・記号の単打確定では、ひらがなの未変換文字列ではなく、現在表示されているライブ変換結果を確定します。
 
 ### Partial revert of history learning after immediate correction
 
