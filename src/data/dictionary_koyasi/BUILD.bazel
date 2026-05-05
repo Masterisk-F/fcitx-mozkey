@@ -1,0 +1,6 @@
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "mozcdic_ut_sample",
+    srcs = ["sample/mozcdic-ut-sample.txt"],
+)

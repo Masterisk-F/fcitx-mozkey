@@ -1,6 +1,8 @@
 ﻿param(
     [ValidateSet("safe")]
-    [string]$Profile = "safe"
+    [string]$Profile = "safe",
+
+    [int]$SampleLines = 5000
 )
 
 $ErrorActionPreference = "Stop"
@@ -104,15 +106,31 @@ if (-not (Test-Path $Generated)) {
 $OutFile = Join-Path $OutDir "mozcdic-ut-safe.txt"
 Copy-Item $Generated $OutFile -Force
 
-$LineCount = (Get-Content $OutFile | Measure-Object -Line).Lines
+$SampleFile = Join-Path $OutDir "mozcdic-ut-sample.txt"
+$Sample = Get-Content -Encoding UTF8 $OutFile -TotalCount $SampleLines
+[System.IO.File]::WriteAllLines($SampleFile, $Sample, $Utf8NoBom)
+
+$LineCount = (Get-Content -Encoding UTF8 $OutFile | Measure-Object -Line).Lines
 $Size = (Get-Item $OutFile).Length
 
+$SampleLineCount = (Get-Content -Encoding UTF8 $SampleFile | Measure-Object -Line).Lines
+$SampleSize = (Get-Item $SampleFile).Length
+
 Write-Host ""
-Write-Host "Generated:"
+Write-Host "Generated full dictionary:"
 Write-Host "  $OutFile"
 Write-Host "Lines:"
 Write-Host "  $LineCount"
 Write-Host "Bytes:"
 Write-Host "  $Size"
+
+Write-Host ""
+Write-Host "Generated sample dictionary:"
+Write-Host "  $SampleFile"
+Write-Host "Lines:"
+Write-Host "  $SampleLineCount"
+Write-Host "Bytes:"
+Write-Host "  $SampleSize"
+
 Write-Host ""
 Write-Host "Done."
