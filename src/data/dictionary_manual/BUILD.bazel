@@ -38,5 +38,7 @@ filegroup(
     srcs = [
         "places.tsv",
         "words.tsv",
+        "koyasi_core_developer.tsv",
+        "koyasi_core_general.tsv",
     ],
 )
