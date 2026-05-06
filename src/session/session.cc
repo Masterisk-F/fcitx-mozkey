@@ -1919,6 +1919,36 @@ bool Session::CommitLiveConversionResult(commands::Command* command) {
   return true;
 }
 
+bool Session::CommitPendingLiveConversionDisplayDirectly(
+    commands::Command* command) {
+  const std::string key = context_->composer().GetQueryForConversion();
+  const std::string raw_preedit = context_->composer().GetStringForPreedit();
+
+  std::string value;
+
+  const bool has_stable_live_conversion =
+      !live_conversion_key_.empty() &&
+      !live_conversion_preedit_.empty() &&
+      !live_conversion_value_.empty() &&
+      live_conversion_preedit_output_.segment_size() > 0;
+
+  if (has_stable_live_conversion &&
+      StartsWithString(key, live_conversion_key_) &&
+      StartsWithString(raw_preedit, live_conversion_preedit_)) {
+    const std::string suffix_value =
+        raw_preedit.substr(live_conversion_preedit_.size());
+
+    value = live_conversion_value_;
+    value.append(suffix_value);
+  } else {
+    value = context_->composer().GetStringForSubmission();
+  }
+
+  ClearLiveConversionState();
+  CommitStringDirectly(key, value, command);
+  return true;
+}
+
 void Session::set_client_capability(commands::Capability capability) {
   *context_->mutable_client_capability() = std::move(capability);
 }
@@ -1979,11 +2009,25 @@ bool Session::InsertCharacter(commands::Command* command) {
 
   command->mutable_output()->set_consumed(true);
 
-  // If a direct-commit punctuation/symbol is typed while a delayed live
-  // conversion is pending, first materialize the pending conversion so that
-  // CommitLiveConversionResult() can commit the exact visible converted prefix.
-  if (live_conversion_pending_ && CanDirectCommitAfterPunctuation(key)) {
-    FlushPendingLiveConversion();
+  // If a direct-commit punctuation/symbol is typed while delayed live conversion
+  // is pending, commit the currently visible pending preedit. Do not materialize
+  // the pending conversion here, because that would commit a conversion result
+  // that has not been shown to the user yet.
+  if (live_conversion_pending_ &&
+      CanDirectCommitPendingLiveConversionBeforeInsert(key)) {
+    context_->mutable_composer()->InsertCharacterKeyEvent(key);
+    ClearUndoContext();
+
+    if (CanDirectCommitAfterPunctuation(key)) {
+      return CommitPendingLiveConversionDisplayDirectly(command);
+    }
+
+    // Defensive fallback. The pre-insert predicate accepted the key as a direct
+    // commit trigger, so this path should normally not be reached. Avoid inserting
+    // the same key twice.
+    CancelPendingLiveConversion();
+    OutputComposition(command);
+    return true;
   }
 
   const bool was_live_conversion = live_conversion_active_;
@@ -3313,6 +3357,42 @@ bool IsValidAutoConversionKey(const config::Config& config,
            config::Config::AUTO_CONVERSION_EXCLAMATION_MARK));
 }
 
+bool IsValidDirectCommitTriggerKey(const config::Config& config,
+                                   const commands::KeyEvent& key_event) {
+  return (MatchesKeyEvent(key_event, static_cast<uint32_t>('.'),
+                          {".", "．", "。", "｡"}) &&
+          (config.direct_commit_key() &
+           config::Config::DIRECT_COMMIT_KUTEN)) ||
+         (MatchesKeyEvent(key_event, static_cast<uint32_t>(','),
+                          {",", "，", "、", "､"}) &&
+          (config.direct_commit_key() &
+           config::Config::DIRECT_COMMIT_TOUTEN)) ||
+         (MatchesKeyEvent(key_event, static_cast<uint32_t>('?'),
+                          {"?", "？"}) &&
+          (config.direct_commit_key() &
+           config::Config::DIRECT_COMMIT_QUESTION_MARK)) ||
+         (MatchesKeyEvent(key_event, static_cast<uint32_t>('!'),
+                          {"!", "！"}) &&
+          (config.direct_commit_key() &
+           config::Config::DIRECT_COMMIT_EXCLAMATION_MARK)) ||
+         (MatchesKeyEvent(key_event, static_cast<uint32_t>('('),
+                          {"(", "（"}) &&
+          (config.direct_commit_key() &
+           config::Config::DIRECT_COMMIT_OPEN_PARENTHESIS)) ||
+         (MatchesKeyEvent(key_event, static_cast<uint32_t>(')'),
+                          {")", "）"}) &&
+          (config.direct_commit_key() &
+           config::Config::DIRECT_COMMIT_CLOSE_PARENTHESIS)) ||
+         (MatchesKeyEvent(key_event, static_cast<uint32_t>('['),
+                          {"[", "［", "「"}) &&
+          (config.direct_commit_key() &
+           config::Config::DIRECT_COMMIT_OPEN_BRACKET)) ||
+         (MatchesKeyEvent(key_event, static_cast<uint32_t>(']'),
+                          {"]", "］", "」"}) &&
+          (config.direct_commit_key() &
+           config::Config::DIRECT_COMMIT_CLOSE_BRACKET));
+}
+
 bool IsValidDirectCommitKey(const config::Config& config,
                             const commands::KeyEvent& key_event,
                             absl::string_view last_char) {
@@ -3419,6 +3499,43 @@ bool Session::CanStartAutoConversion(
     return false;
   }
   return true;
+}
+
+bool Session::CanDirectCommitPendingLiveConversionBeforeInsert(
+    const commands::KeyEvent& key_event) const {
+  const config::Config& config = context_->GetConfig();
+
+  if (!config.use_direct_commit()) {
+    return false;
+  }
+
+  // Mutual exclusion guard. Even if both are accidentally enabled in config,
+  // direct commit is disabled here.
+  if (config.use_auto_conversion()) {
+    return false;
+  }
+
+  if (context_->state() != ImeContext::COMPOSITION) {
+    return false;
+  }
+
+  // Disable if the input comes from non-standard user keyboards, like numpad.
+  if (key_event.input_style() != commands::KeyEvent::FOLLOW_MODE) {
+    return false;
+  }
+
+  // Disable in ASCII mode.
+  if (key_event.mode() == commands::HALF_ASCII ||
+      key_event.mode() == commands::FULL_ASCII) {
+    return false;
+  }
+
+  const size_t length = context_->composer().GetLength();
+  if (length == 0 || length != context_->composer().GetCursor()) {
+    return false;
+  }
+
+  return IsValidDirectCommitTriggerKey(config, key_event);
 }
 
 bool Session::CanDirectCommitAfterPunctuation(
