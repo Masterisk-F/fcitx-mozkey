@@ -43,6 +43,7 @@ $AdditionalRequiredFiles = @()
 
 if ($Profile -eq "daily") {
     $AdditionalRequiredFiles += Join-Path $RepoRoot "src\data\dictionary_koyasi\generated\profiled\dic-nico-pixiv-delta.txt"
+    $AdditionalRequiredFiles += Join-Path $RepoRoot "src\data\dictionary_koyasi\generated\profiled\koyasi-syntax-guard.txt"
 }
 
 foreach ($AdditionalRequiredFile in $AdditionalRequiredFiles) {

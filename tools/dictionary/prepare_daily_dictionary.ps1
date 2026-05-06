@@ -43,7 +43,14 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host ""
-Write-Host "Step 6: Switch active profile to daily..."
+Write-Host "Step 6: Generate syntax guard dictionary..."
+python (Join-Path $RepoRoot "tools\dictionary\generate_syntax_guard_dictionary.py")
+if ($LASTEXITCODE -ne 0) {
+    throw "generate_syntax_guard_dictionary.py failed."
+}
+
+Write-Host ""
+Write-Host "Step 7: Switch active profile to daily..."
 & (Join-Path $RepoRoot "tools\dictionary\use_merge_ut_profile.ps1") -Profile daily
 
 Write-Host ""
