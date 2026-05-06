@@ -403,6 +403,8 @@ class Session {
   void ClearLiveConversionState();
   void CancelLiveConversionForEditing();
   bool CommitLiveConversionResult(mozc::commands::Command* command);
+  bool CommitPendingLiveConversionDisplayDirectly(
+      mozc::commands::Command* command);
   bool OutputPendingLiveConversion(mozc::commands::Command* command) const;
   void AttachDelayedLiveConversionCallback(
       mozc::commands::Command* command) const;
@@ -439,10 +441,15 @@ class Session {
   // AutoIMEConversion.
   bool CanStartAutoConversion(const mozc::commands::KeyEvent& key_event) const;
 
+  // return true if the pending live conversion display should be committed
+  // directly after inserting the configured punctuation/symbol key.
+  bool CanDirectCommitPendingLiveConversionBeforeInsert(
+      const mozc::commands::KeyEvent& key_event) const;
+
   // return true if the current composition should be committed directly
   // after typing the configured punctuation/symbol key.
   bool CanDirectCommitAfterPunctuation(
-    const mozc::commands::KeyEvent& key_event) const;
+      const mozc::commands::KeyEvent& key_event) const;
 
   // Handles KeyEvent::activated to support indirect IME on/off.
   bool HandleIndirectImeOnOff(mozc::commands::Command* command);
