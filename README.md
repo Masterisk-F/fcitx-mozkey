@@ -114,6 +114,11 @@ Main branches
 - Windows 版の候補ウィンドウにダークモード切り替えを追加
 - Windows 版で未確定文字の文字色・背景色・下線色を設定画面からカスタマイズ可能
 - Windows 版の候補ウィンドウや IME 切り替えインジケータの配色・余白・角丸などの見た目を調整
+- system dictionary 強化用の追加辞書生成パイプラインを追加
+- merge-ut-dictionaries 由来の地名・SudachiDict 系語彙を system dictionary に取り込めるようにした
+- dic-nico-intersection-pixiv 由来のネット・サブカル系固有名詞を、既存辞書との差分として daily 辞書に追加可能
+- 文節区切り崩れを抑えるための syntax guard 辞書を daily 辞書生成パイプラインに追加
+- 大規模な生成辞書は Git に含めず、ローカルで再生成して Bazel の辞書入力へ切り替える運用に
 - 自分の Windows 開発環境向けのビルド調整
 
 Examples
@@ -337,6 +342,56 @@ Windows 版では、設定画面から未確定文字の表示色をカスタマ
 日本語入力中・変換中の未確定文字を見やすくするための機能です。特に、視認性を高めたいユーザー向けのアクセシビリティ改善として追加しています。
 
 この設定は Windows TSF の表示属性として反映されます。対応アプリでのみ有効です。Chrome や Edge など、一部のアプリでは反映されない場合があります。
+
+Enhanced system dictionary
+--------------------------
+
+This fork includes scripts to build an enhanced Mozc system dictionary from
+external dictionary sources.
+
+The daily local dictionary can be generated from:
+
+- merge-ut-dictionaries
+  - place names
+  - SudachiDict-derived vocabulary
+- dic-nico-intersection-pixiv
+  - additional proper nouns, internet slang, works, characters, and subculture terms
+  - entries already covered by the generated daily dictionary or the base Mozc dictionaries are skipped
+- Koyasi syntax guard dictionary
+  - small generated guard entries for high-impact segmentation failures
+  - for example, protecting grammar-like paths such as `と打ちたいのに` and `に分ける`
+
+Large generated dictionary files are not committed to this repository.
+They are generated locally under `src/data/dictionary_koyasi/generated/`.
+
+See:
+
+- [Koyasi Dictionary Data](src/data/dictionary_koyasi/README.md)
+
+system dictionary の強化
+-----------------------
+
+この fork では、外部辞書を元に Mozc の system dictionary を強化するための
+生成スクリプトを追加しています。
+
+daily local 辞書は主に以下を元に生成できます。
+
+- merge-ut-dictionaries
+  - 地名
+  - SudachiDict 由来語彙
+- dic-nico-intersection-pixiv
+  - 固有名詞、ネットスラング、作品名、キャラクター名、サブカル系語彙
+  - 生成済み daily 辞書または Mozc 標準辞書に既に存在する key/value は除外
+- Koyasi syntax guard 辞書
+  - 文節区切り崩れの影響が大きいケースだけを小さな生成辞書として補強
+  - 例: `と打ちたいのに` や `に分ける` のような文法的に自然な経路を保護
+
+巨大な生成辞書ファイルは、このリポジトリには commit しません。
+`src/data/dictionary_koyasi/generated/` 以下にローカル生成します。
+
+詳細:
+
+- [Koyasi Dictionary Data](src/data/dictionary_koyasi/README.md)
 
 Note
 ----

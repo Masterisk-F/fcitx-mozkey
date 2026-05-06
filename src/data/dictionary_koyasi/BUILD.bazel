@@ -1,0 +1,34 @@
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "mozcdic_ut_sample",
+    srcs = ["sample/mozcdic-ut-sample.txt"],
+)
+
+filegroup(
+    name = "mozcdic_ut_daily_local",
+    srcs = glob(
+        [
+            "generated/profiled/dic-nico-pixiv-delta.txt",
+            "generated/profiled/koyasi-syntax-guard.txt",
+            "generated/profiled/mozcdic-ut-daily.txt",
+        ],
+        allow_empty = True,
+    ),
+)
+
+filegroup(
+    name = "mozcdic_ut_rich_local",
+    srcs = glob(
+        ["generated/profiled/mozcdic-ut-rich.txt"],
+        allow_empty = True,
+    ),
+)
+
+filegroup(
+    name = "mozcdic_ut_max_local",
+    srcs = glob(
+        ["generated/profiled/mozcdic-ut-max.txt"],
+        allow_empty = True,
+    ),
+)
