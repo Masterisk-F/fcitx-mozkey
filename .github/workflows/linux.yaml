@@ -33,6 +33,12 @@ jobs:
           # Unset the Android NDK setting to skip the unnecessary configuration.
           echo "ANDROID_NDK_HOME=" >> $GITHUB_ENV
 
+      - name: Prepare daily dictionary
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          ./tools/dictionary/prepare_daily_dictionary.ps1
+
       - name: bazel build
         working-directory: ./src
         run: |
@@ -64,6 +70,12 @@ jobs:
           #
           # Unset the Android NDK setting to skip the unnecessary configuration.
           echo "ANDROID_NDK_HOME=" >> $GITHUB_ENV
+
+      - name: Prepare daily dictionary
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          ./tools/dictionary/prepare_daily_dictionary.ps1
 
       - name: bazel test
         working-directory: ./src

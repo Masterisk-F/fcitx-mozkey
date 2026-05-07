@@ -38,6 +38,12 @@ jobs:
         run: |
           python build_tools/update_deps.py
 
+      - name: Prepare daily dictionary
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          .\tools\dictionary\prepare_daily_dictionary.ps1
+
       - name: Build Qt
         shell: cmd
         working-directory: .\src
@@ -145,6 +151,12 @@ jobs:
         # This command uses src/third_party_cache as the download cache.
         run: |
           python build_tools/update_deps.py
+
+      - name: Prepare daily dictionary
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          .\tools\dictionary\prepare_daily_dictionary.ps1
 
       - name: Build Qt
         shell: cmd
@@ -254,6 +266,12 @@ jobs:
         run: |
           python build_tools/update_deps.py
 
+      - name: Prepare daily dictionary
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          .\tools\dictionary\prepare_daily_dictionary.ps1
+
       - name: Build Qt (arm64)
         shell: cmd
         working-directory: .\src
@@ -361,6 +379,12 @@ jobs:
         # This command uses src/third_party_cache as the download cache.
         run: |
           python build_tools/update_deps.py
+
+      - name: Prepare daily dictionary
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          .\tools\dictionary\prepare_daily_dictionary.ps1
 
       - name: runtests
         shell: cmd

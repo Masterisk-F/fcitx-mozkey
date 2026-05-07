@@ -37,6 +37,12 @@ jobs:
         run: |
           python3 build_tools/update_deps.py
 
+      - name: Prepare daily dictionary
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          ./tools/dictionary/prepare_daily_dictionary.ps1
+
       - name: Build Qt
         working-directory: ./src
         run: |
@@ -77,6 +83,12 @@ jobs:
         # This command uses src/third_party_cache as the download cache.
         run: |
           python3 build_tools/update_deps.py
+
+      - name: Prepare daily dictionary
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          ./tools/dictionary/prepare_daily_dictionary.ps1
 
       - name: Build Qt
         working-directory: ./src
@@ -119,6 +131,12 @@ jobs:
         run: |
           python3 build_tools/update_deps.py
 
+      - name: Prepare daily dictionary
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          ./tools/dictionary/prepare_daily_dictionary.ps1
+
       - name: Build Qt
         working-directory: ./src
         run: |
@@ -159,6 +177,12 @@ jobs:
         # This command uses src/third_party_cache as the download cache.
         run: |
           python3 build_tools/update_deps.py
+
+      - name: Prepare daily dictionary
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          ./tools/dictionary/prepare_daily_dictionary.ps1
 
       - name: bazel test
         working-directory: ./src
