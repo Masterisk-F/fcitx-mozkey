@@ -70,7 +70,6 @@ function Find-Bash {
 $BashPath = Find-Bash
 
 Write-Host "Using bash: $BashPath"
-Write-Host "Using bash: $BashPath"
 
 if (-not (Test-Path $MergeRepo)) {
     Write-Host "Cloning merge-ut-dictionaries..."
@@ -198,7 +197,7 @@ $MergeDir = Join-Path $MergeRepo "src\merge"
 Write-Host "Running make.sh..."
 Push-Location $MergeDir
 try {
-    & $BashPath -lc "sh make.sh"
+    & $BashPath -lc "bash ./make.sh"
     if ($LASTEXITCODE -ne 0) {
         throw "make.sh failed with exit code $LASTEXITCODE"
     }
@@ -222,13 +221,22 @@ if ($EffectiveProfile -eq "sample") {
 
 Copy-Item $Generated $OutFile -Force
 
-if ($SampleLines -gt 0) {
-    $Sample = Get-Content -Encoding UTF8 $OutFile -TotalCount $SampleLines
-    [System.IO.File]::WriteAllLines($SampleFile, $Sample, $Utf8NoBom)
-}
-
 $LineCount = (Get-Content -Encoding UTF8 $OutFile | Measure-Object -Line).Lines
 $Size = (Get-Item $OutFile).Length
+
+if ($LineCount -le 0) {
+    throw "Generated dictionary is empty: $OutFile"
+}
+
+if ($SampleLines -gt 0) {
+    [string[]]$Sample = @(Get-Content -Encoding UTF8 $OutFile -TotalCount $SampleLines)
+
+    if ($Sample.Count -le 0) {
+        throw "Generated sample dictionary would be empty: $OutFile"
+    }
+
+    [System.IO.File]::WriteAllLines($SampleFile, $Sample, $Utf8NoBom)
+}
 
 Write-Host ""
 Write-Host "Generated full dictionary:"
