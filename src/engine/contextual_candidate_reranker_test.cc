@@ -267,6 +267,164 @@ TEST(ContextualCandidateRerankerTest,
   EXPECT_EQ(segments.conversion_segment(0).candidate(0).value, "に");
 }
 
+TEST(ContextualCandidateRerankerTest,
+     PromotesShikaNegativePrefixAfterCounterExpression) {
+  Segments segments;
+
+  Segment* number = AddConversionSegment(&segments, "2");
+  AddCandidate(number, "2", "2", 1000);
+
+  Segment* counter = AddConversionSegment(&segments, "めい");
+  AddCandidate(counter, "めい", "名", 1000);
+
+  Segment* shika = AddConversionSegment(&segments, "しかい");
+
+  // Regression case:
+  //   2名 + しかい...
+  // should not become:
+  //   2名 + 司会 / 視界 / 歯科医
+  AddCandidate(shika, "しかい", "司会", 6401);
+  AddCandidate(shika, "しかい", "視界", 6461);
+  AddCandidate(shika, "しかい", "歯科医", 7459);
+
+  // The functional-expression path is initially much worse by raw cost.
+  AddCandidate(shika, "しかい", "しかい", 12422);
+
+  ASSERT_EQ(segments.conversion_segments_size(), 3);
+  ASSERT_EQ(segments.conversion_segment(2).candidate(0).value, "司会");
+
+  ContextualCandidateReranker reranker;
+  reranker.Rerank(&segments);
+
+  EXPECT_EQ(segments.conversion_segment(2).candidate(0).value, "しかい");
+}
+
+TEST(ContextualCandidateRerankerTest,
+     PromotesCounterPlusShikaOverHomophoneCompounds) {
+  Segments segments;
+
+  Segment* number = AddConversionSegment(&segments, "2");
+  AddCandidate(number, "2", "2", 1000);
+
+  Segment* shika = AddConversionSegment(&segments, "めいしか");
+
+  // Bad compound-like candidates are initially on top.
+  AddCandidate(shika, "めいしか", "名歯科", 5000);
+  AddCandidate(shika, "めいしか", "名士か", 5200);
+
+  // Desired functional expression.
+  AddCandidate(shika, "めいしか", "名しか", 9000);
+
+  ASSERT_EQ(segments.conversion_segments_size(), 2);
+  ASSERT_EQ(segments.conversion_segment(1).candidate(0).value, "名歯科");
+
+  ContextualCandidateReranker reranker;
+  reranker.Rerank(&segments);
+
+  EXPECT_EQ(segments.conversion_segment(1).candidate(0).value, "名しか");
+}
+
+TEST(ContextualCandidateRerankerTest,
+     DoesNotDemoteShikaiAfterNoAttributiveContext) {
+  Segments segments;
+
+  Segment* previous = AddConversionSegment(&segments, "つぎの");
+  AddCandidate(previous, "つぎの", "次の", 1000);
+
+  Segment* shikai = AddConversionSegment(&segments, "しかい");
+  AddCandidate(shikai, "しかい", "司会", 6401);
+  AddCandidate(shikai, "しかい", "しかい", 12422);
+
+  ASSERT_EQ(segments.conversion_segments_size(), 2);
+  ASSERT_EQ(segments.conversion_segment(1).candidate(0).value, "司会");
+
+  ContextualCandidateReranker reranker;
+  reranker.Rerank(&segments);
+
+  EXPECT_EQ(segments.conversion_segment(1).candidate(0).value, "司会");
+}
+
+TEST(ContextualCandidateRerankerTest,
+     PromotesShikaNegativePrefixAfterCounterHistory) {
+  Segments segments;
+
+  AddHistorySegment(&segments, "2めい", "2名");
+
+  Segment* shika = AddConversionSegment(&segments, "しかい");
+  AddCandidate(shika, "しかい", "司会", 6401);
+  AddCandidate(shika, "しかい", "視界", 6461);
+  AddCandidate(shika, "しかい", "しかい", 12422);
+
+  ASSERT_EQ(segments.conversion_segments_size(), 1);
+  ASSERT_EQ(segments.conversion_segment(0).candidate(0).value, "司会");
+
+  ContextualCandidateReranker reranker;
+  reranker.Rerank(&segments);
+
+  EXPECT_EQ(segments.conversion_segment(0).candidate(0).value, "しかい");
+}
+
+TEST(ContextualCandidateRerankerTest,
+     PromotesShikaExplicitNegativeAfterNoContext) {
+  Segments segments;
+
+  Segment* previous = AddConversionSegment(&segments, "やまだの");
+  AddCandidate(previous, "やまだの", "山田の", 1000);
+
+  Segment* shika = AddConversionSegment(&segments, "しかな");
+  AddCandidate(shika, "しかな", "鹿名", 5000);
+  AddCandidate(shika, "しかな", "歯科名", 5200);
+  AddCandidate(shika, "しかな", "しかな", 12422);
+
+  ASSERT_EQ(segments.conversion_segments_size(), 2);
+  ASSERT_EQ(segments.conversion_segment(1).candidate(0).value, "鹿名");
+
+  ContextualCandidateReranker reranker;
+  reranker.Rerank(&segments);
+
+  EXPECT_EQ(segments.conversion_segment(1).candidate(0).value, "しかな");
+}
+
+TEST(ContextualCandidateRerankerTest,
+     DoesNotDemoteShikaiAfterNoContext) {
+  Segments segments;
+
+  Segment* previous = AddConversionSegment(&segments, "やまだの");
+  AddCandidate(previous, "やまだの", "山田の", 1000);
+
+  Segment* shikai = AddConversionSegment(&segments, "しかい");
+  AddCandidate(shikai, "しかい", "司会", 6401);
+  AddCandidate(shikai, "しかい", "しかい", 12422);
+
+  ASSERT_EQ(segments.conversion_segments_size(), 2);
+  ASSERT_EQ(segments.conversion_segment(1).candidate(0).value, "司会");
+
+  ContextualCandidateReranker reranker;
+  reranker.Rerank(&segments);
+
+  EXPECT_EQ(segments.conversion_segment(1).candidate(0).value, "司会");
+}
+
+TEST(ContextualCandidateRerankerTest,
+     PromotesShikaNegativePrefixAfterNounLikeHistory) {
+  Segments segments;
+
+  AddHistorySegment(&segments, "やまだ", "山田");
+
+  Segment* shika = AddConversionSegment(&segments, "しかい");
+  AddCandidate(shika, "しかい", "司会", 6401);
+  AddCandidate(shika, "しかい", "視界", 6461);
+  AddCandidate(shika, "しかい", "しかい", 12422);
+
+  ASSERT_EQ(segments.conversion_segments_size(), 1);
+  ASSERT_EQ(segments.conversion_segment(0).candidate(0).value, "司会");
+
+  ContextualCandidateReranker reranker;
+  reranker.Rerank(&segments);
+
+  EXPECT_EQ(segments.conversion_segment(0).candidate(0).value, "しかい");
+}
+
 }  // namespace
 }  // namespace engine
 }  // namespace mozc
