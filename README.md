@@ -109,7 +109,7 @@ Main branches
 - ライブ変換は設定画面から ON/OFF と変換開始までの遅延時間を変更可能
 - ライブ変換は入力直後の不要な変換ちらつきを抑えるため、文字入力後に短いデバウンスを挟んで実行
 - 1文字だけの未確定文字列では、助詞などの誤変換を避けるためライブ変換を実行しない
-- 確定済みの左文脈や直前の文節を参照し、`mainにマージしました`、`githubには`、`2名しかいない`、`追記したい`、`山梨県立美術館` のような文脈で、助詞・複合機能語・機能表現・接尾的な語構成が同音漢字候補に負ける挙動を抑制
+- 確定済みの左文脈や直前の文節、限定的な右文脈を参照し、`mainにマージしました`、`githubには`、`2名しかいない`、`追記したい`、`山梨県立美術館`、`滋賀方面` のような文脈で、助詞・複合機能語・機能表現・接尾的な語構成・地名接尾構成が同音漢字候補に負ける挙動を抑制
 - Windows 版で左 Shift / 右 Shift / 左 Ctrl / 右 Ctrl を個別キーとして設定画面から割り当て可能
 - Windows 版で IMEOn / IMEOff に割り当てたキーを押した場合、すでに同じ状態でも IME モードインジケータを表示
 - Windows 版の候補ウィンドウにダークモード切り替えを追加
@@ -236,8 +236,9 @@ homophone paths such as `2名司会...`, `2名視界...`, or `2名士会内`.
 
 It also protects some context-sensitive noun and suffix constructions.  For
 example, `追記したい` is biased away from homophone noun candidates such as
-`追記死体`, and `山梨県立美術館` is biased away from broken suffix paths such as
-`山梨県率美術館`.
+`追記死体`, `山梨県立美術館` is biased away from broken suffix paths such as
+`山梨県率美術館`, and place-suffix phrases such as `滋賀方面` or `佐賀空港`
+are biased away from short `content + が` splits such as `子が方面`.
 
 ### 確定済み左文脈を使った変換補正
 
@@ -268,9 +269,10 @@ example, `追記したい` is biased away from homophone noun candidates such as
 たとえば `2めいしかいない` では、途中の `2名司会...`、`2名視界...`、
 `2名士会内` のような同音漢字経路よりも、`2名しかいない` を優先しやすくします。
 
-また、サ変接続名詞や行政地名・施設名のような直前文脈も一部補正対象にします。
+また、サ変接続名詞や行政地名・施設名のような直前文脈、地名に続く場所接尾語のような限定的な右文脈も一部補正対象にします。
 たとえば `追記したい` では `追記死体` のような同音名詞候補を避け、
 `山梨県立美術館` では `山梨県率美術館` のような接尾的構成の崩れを抑制します。
+また、`滋賀方面` や `佐賀空港` のような語では、`子が方面` のような短い `内容語 + が` 分割を避けやすくします。
 
 ### Direct commit for punctuations/symbols
 

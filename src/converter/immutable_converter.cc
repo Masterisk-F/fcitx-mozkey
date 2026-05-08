@@ -1030,6 +1030,224 @@ bool IsRitsuHijackNode(const dictionary::PosMatcher& pos_matcher,
   return true;
 }
 
+struct PlaceSuffixEvidence {
+  absl::string_view key;
+  absl::string_view value;
+};
+
+bool IsPlaceSuffixEvidenceNode(const Node& node) {
+  if (node.node_type != Node::NOR_NODE) {
+    return false;
+  }
+
+  if (node.key.empty() || node.value.empty()) {
+    return false;
+  }
+
+  // Keep this list conservative.  These suffixes are strong evidence that the
+  // preceding same-span candidate is a place name rather than "content + が".
+  static constexpr PlaceSuffixEvidence kStrongPlaceSuffixes[] = {
+      {"ほうめん", "方面"},
+      {"ほうこう", "方向"},
+      {"ふきん", "付近"},
+      {"きんぺん", "近辺"},
+      {"しゅうへん", "周辺"},
+      {"かいわい", "界隈"},
+      {"いったい", "一帯"},
+      {"きんこう", "近郊"},
+      {"ちほう", "地方"},
+      {"ちいき", "地域"},
+
+      {"えき", "駅"},
+      {"えきまえ", "駅前"},
+      {"くうこう", "空港"},
+      {"みなと", "港"},
+      {"こう", "港"},
+      {"おんせん", "温泉"},
+
+      {"こうえん", "公園"},
+      {"びじゅつかん", "美術館"},
+      {"はくぶつかん", "博物館"},
+      {"としょかん", "図書館"},
+      {"だいがく", "大学"},
+      {"こうこう", "高校"},
+      {"びょういん", "病院"},
+
+      {"えんせん", "沿線"},
+      {"どうろ", "道路"},
+      {"こくどう", "国道"},
+      {"けんどう", "県道"},
+      {"かいどう", "街道"},
+
+      {"いき", "行き"},
+      {"ゆき", "行き"},
+      {"はつ", "発"},
+      {"ちゃく", "着"},
+      {"けいゆ", "経由"},
+  };
+
+  for (const PlaceSuffixEvidence& suffix : kStrongPlaceSuffixes) {
+    if (node.key == suffix.key && node.value == suffix.value) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool HasPlaceSuffixEvidence(const Lattice& lattice, size_t begin_pos) {
+  if (begin_pos >= lattice.key().size()) {
+    return false;
+  }
+
+  for (const Node* node : lattice.begin_nodes(begin_pos)) {
+    if (node == nullptr) {
+      continue;
+    }
+
+    if (node->end_pos <= node->begin_pos ||
+        node->end_pos > lattice.key().size()) {
+      continue;
+    }
+
+    if (IsPlaceSuffixEvidenceNode(*node)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool IsGaParticleNode(const dictionary::PosMatcher& pos_matcher,
+                      const Node& node) {
+  if (node.node_type != Node::NOR_NODE) {
+    return false;
+  }
+
+  if (node.key != "が" || node.value != "が") {
+    return false;
+  }
+
+  return IsKanaFunctionalNode(pos_matcher, node);
+}
+
+bool IsPlaceLikeNode(const dictionary::PosMatcher& pos_matcher,
+                     const Node& node) {
+  if (node.node_type != Node::NOR_NODE) {
+    return false;
+  }
+
+  if (node.key.empty() || node.value.empty()) {
+    return false;
+  }
+
+  if (node.key == node.value) {
+    return false;
+  }
+
+  if (Util::GetScriptType(node.key) != Util::HIRAGANA) {
+    return false;
+  }
+
+  if (!Util::ContainsScriptType(node.value, Util::KANJI)) {
+    return false;
+  }
+
+  if (Util::CharsLen(node.key) < 2) {
+    return false;
+  }
+
+  // Place names in Mozc are usually proper nouns.  Also accept candidates
+  // ending in an administrative unit for cases such as "山梨県".
+  return pos_matcher.IsUniqueNoun(node.lid) ||
+         pos_matcher.IsUniqueNoun(node.rid) ||
+         EndsWithAdministrativeUnit(node.value);
+}
+
+bool HasSameSpanPlaceCandidate(const dictionary::PosMatcher& pos_matcher,
+                               const Lattice& lattice,
+                               size_t begin_pos,
+                               size_t end_pos) {
+  if (begin_pos >= end_pos || end_pos > lattice.key().size()) {
+    return false;
+  }
+
+  for (const Node* candidate : lattice.begin_nodes(begin_pos)) {
+    if (candidate == nullptr) {
+      continue;
+    }
+
+    if (candidate->end_pos != end_pos) {
+      continue;
+    }
+
+    if (IsPlaceLikeNode(pos_matcher, *candidate)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool IsOneKanaOneKanjiGaFusedNode(const Node& node) {
+  if (node.node_type != Node::NOR_NODE) {
+    return false;
+  }
+
+  if ((node.attributes & Node::USER_DICTIONARY) != 0) {
+    return false;
+  }
+
+  if (node.key.empty() || node.value.empty()) {
+    return false;
+  }
+
+  if (Util::GetScriptType(node.key) != Util::HIRAGANA) {
+    return false;
+  }
+
+  constexpr absl::string_view kGa = "が";
+
+  if (!EndsWithLiteral(node.key, kGa) ||
+      !EndsWithLiteral(node.value, kGa)) {
+    return false;
+  }
+
+  const absl::string_view content_key =
+      node.key.substr(0, node.key.size() - kGa.size());
+  const absl::string_view content_value =
+      node.value.substr(0, node.value.size() - kGa.size());
+
+  if (content_key.empty() || content_value.empty()) {
+    return false;
+  }
+
+  if (Util::GetScriptType(content_key) != Util::HIRAGANA) {
+    return false;
+  }
+
+  if (Util::CharsLen(content_key) != 1) {
+    return false;
+  }
+
+  if (Util::CharsLen(content_value) != 1) {
+    return false;
+  }
+
+  if (!Util::ContainsScriptType(content_value, Util::KANJI)) {
+    return false;
+  }
+
+  // Unlike IsOneKanaOneKanjiNode(), do not reject proper nouns here.
+  // This guard is already gated by:
+  //   same-span place candidate + strong place suffix.
+  //
+  // The problematic candidate can be a fused node such as:
+  //   しが -> 子が
+  // with ckey=し and cval=子.
+  return true;
+}
+
 bool IsContentKanjiNodeForAdverbialGuard(
     const dictionary::PosMatcher& pos_matcher,
     const Node& node) {
@@ -2160,6 +2378,7 @@ bool ImmutableConverter::MakeLattice(const ConversionRequest& request,
     ApplyFunctionalKanaGuard(history_key, lattice);
     ApplySahenShitaiGuard(history_key, lattice);
     ApplyAdministrativeRitsuGuard(history_key, lattice);
+    ApplyPlaceSuffixGuard(history_key, lattice);
     ApplyAdverbialNiGuard(history_key, lattice);
     ApplyGrammarLikeProperNounGuard(history_key, lattice);
 
@@ -2492,6 +2711,101 @@ void ImmutableConverter::ApplyAdministrativeRitsuGuard(
       }
 
       node->wcost += kAdministrativeRitsuPenalty;
+    }
+  }
+}
+
+void ImmutableConverter::ApplyPlaceSuffixGuard(
+    absl::string_view history_key, Lattice* lattice) const {
+  if (lattice == nullptr) {
+    return;
+  }
+
+  const size_t key_size = lattice->key().size();
+  const size_t conversion_begin_pos = history_key.size();
+
+  if (conversion_begin_pos >= key_size) {
+    return;
+  }
+
+  absl::flat_hash_set<Node*> penalized;
+  constexpr int kPlaceSuffixSplitPenalty = 2600;
+
+  for (size_t pos = conversion_begin_pos; pos < key_size; ++pos) {
+    for (Node* left : lattice->begin_nodes(pos)) {
+      // Case 1:
+      //   fused content+particle node
+      //
+      // Example:
+      //   node: しが -> 子が
+      //   same span candidate: しが -> 滋賀
+      //   suffix: ほうめん -> 方面
+      //
+      // Candidate logs show this as:
+      //   key=しが ckey=し val=子が cval=子
+      if (IsOneKanaOneKanjiGaFusedNode(*left)) {
+        if (left->end_pos <= left->begin_pos || left->end_pos >= key_size) {
+          continue;
+        }
+
+        if (!HasPlaceSuffixEvidence(*lattice, left->end_pos)) {
+          continue;
+        }
+
+        if (!HasSameSpanPlaceCandidate(
+                pos_matcher_, *lattice, left->begin_pos, left->end_pos)) {
+          continue;
+        }
+
+        if (penalized.insert(left).second) {
+          left->wcost += kPlaceSuffixSplitPenalty;
+        }
+
+        continue;
+      }
+
+      // Case 2:
+      //   split content + particle path
+      //
+      // Example:
+      //   left: し -> 子
+      //   ga:   が -> が
+      //   same span candidate: しが -> 滋賀
+      //   suffix: ほうめん -> 方面
+      if (!IsOneKanaOneKanjiNode(pos_matcher_, *left)) {
+        continue;
+      }
+
+      if (left->end_pos <= left->begin_pos || left->end_pos >= key_size) {
+        continue;
+      }
+
+      for (const Node* ga : lattice->begin_nodes(left->end_pos)) {
+        if (ga == nullptr) {
+          continue;
+        }
+
+        if (!IsGaParticleNode(pos_matcher_, *ga)) {
+          continue;
+        }
+
+        if (ga->end_pos <= ga->begin_pos || ga->end_pos >= key_size) {
+          continue;
+        }
+
+        if (!HasPlaceSuffixEvidence(*lattice, ga->end_pos)) {
+          continue;
+        }
+
+        if (!HasSameSpanPlaceCandidate(
+                pos_matcher_, *lattice, left->begin_pos, ga->end_pos)) {
+          continue;
+        }
+
+        if (penalized.insert(left).second) {
+          left->wcost += kPlaceSuffixSplitPenalty;
+        }
+      }
     }
   }
 }

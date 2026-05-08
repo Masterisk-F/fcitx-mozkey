@@ -131,6 +131,13 @@ class ImmutableConverter : public ImmutableConverterInterface {
   void ApplyAdministrativeRitsuGuard(absl::string_view history_key,
                                      Lattice* lattice) const;
 
+  // Penalizes short "content + が" splits when the same span has a place-like
+  // candidate followed by a strong place suffix, such as:
+  //   し + が + 方面 -> 滋賀方面
+  //   さ + が + 空港 -> 佐賀空港
+  void ApplyPlaceSuffixGuard(absl::string_view history_key,
+                             Lattice* lattice) const;
+
   // Penalizes content nodes that steal a natural adverbial "Xに + は/も/..."
   // phrase, such as:
   //
