@@ -125,6 +125,12 @@ class ImmutableConverter : public ImmutableConverterInterface {
   void ApplySahenShitaiGuard(absl::string_view history_key,
                              Lattice* lattice) const;
 
+  // Penalizes "りつ" content nodes such as "率" or "律" after administrative
+  // history contexts where the suffix "立" is much more likely, as in:
+  //   山梨県 + りつ + 美術館 -> 山梨県立美術館
+  void ApplyAdministrativeRitsuGuard(absl::string_view history_key,
+                                     Lattice* lattice) const;
+
   // Penalizes content nodes that steal a natural adverbial "Xに + は/も/..."
   // phrase, such as:
   //

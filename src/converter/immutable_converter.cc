@@ -940,6 +940,96 @@ bool IsShitaiContentNounHijackNode(
   return true;
 }
 
+bool EndsWithAdministrativeUnit(absl::string_view value) {
+  return EndsWithLiteral(value, "都") ||
+         EndsWithLiteral(value, "道") ||
+         EndsWithLiteral(value, "府") ||
+         EndsWithLiteral(value, "県") ||
+         EndsWithLiteral(value, "市") ||
+         EndsWithLiteral(value, "区") ||
+         EndsWithLiteral(value, "町") ||
+         EndsWithLiteral(value, "村") ||
+         EndsWithLiteral(value, "国") ||
+         EndsWithLiteral(value, "公") ||
+         EndsWithLiteral(value, "私");
+}
+
+bool HasAdministrativePredecessor(const Lattice& lattice,
+                                  size_t begin_pos) {
+  if (begin_pos == 0) {
+    return false;
+  }
+
+  for (const Node* prev : lattice.end_nodes(begin_pos)) {
+    if (prev == nullptr) {
+      continue;
+    }
+
+    if (prev->end_pos != begin_pos) {
+      continue;
+    }
+
+    // Handle both:
+    //   history context: 山梨県(HIS_NODE) + りつ
+    //   continuous input: 山梨県(NOR_NODE) + りつ + 美術館
+    if (prev->node_type != Node::HIS_NODE &&
+        prev->node_type != Node::NOR_NODE) {
+      continue;
+    }
+
+    if (EndsWithAdministrativeUnit(prev->value)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool HasRitsuSuffixCandidate(const Lattice& lattice, size_t begin_pos) {
+  for (const Node* node : lattice.begin_nodes(begin_pos)) {
+    if (node == nullptr) {
+      continue;
+    }
+
+    if (node->key == "りつ" && node->value == "立") {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+bool IsRitsuHijackNode(const dictionary::PosMatcher& pos_matcher,
+                       const Node& node) {
+  if (node.node_type != Node::NOR_NODE) {
+    return false;
+  }
+
+  if (node.key != "りつ") {
+    return false;
+  }
+
+  // Keep the intended administrative suffix candidate.
+  if (node.value == "立") {
+    return false;
+  }
+
+  if (Util::GetScriptType(node.key) != Util::HIRAGANA) {
+    return false;
+  }
+
+  if (!Util::ContainsScriptType(node.value, Util::KANJI)) {
+    return false;
+  }
+
+  if (pos_matcher.IsUniqueNoun(node.lid) ||
+      pos_matcher.IsUniqueNoun(node.rid)) {
+    return false;
+  }
+
+  return true;
+}
+
 bool IsContentKanjiNodeForAdverbialGuard(
     const dictionary::PosMatcher& pos_matcher,
     const Node& node) {
@@ -2069,6 +2159,7 @@ bool ImmutableConverter::MakeLattice(const ConversionRequest& request,
   if (!is_reverse && !conversion_key.empty()) {
     ApplyFunctionalKanaGuard(history_key, lattice);
     ApplySahenShitaiGuard(history_key, lattice);
+    ApplyAdministrativeRitsuGuard(history_key, lattice);
     ApplyAdverbialNiGuard(history_key, lattice);
     ApplyGrammarLikeProperNounGuard(history_key, lattice);
 
@@ -2368,6 +2459,40 @@ void ImmutableConverter::ApplySahenShitaiGuard(
     }
 
     node->wcost += kSahenShitaiHijackPenalty;
+  }
+}
+
+void ImmutableConverter::ApplyAdministrativeRitsuGuard(
+    absl::string_view history_key, Lattice* lattice) const {
+  if (lattice == nullptr) {
+    return;
+  }
+
+  const size_t key_size = lattice->key().size();
+  const size_t conversion_begin_pos = history_key.size();
+
+  if (conversion_begin_pos >= key_size) {
+    return;
+  }
+
+  constexpr int kAdministrativeRitsuPenalty = 2200;
+
+  for (size_t pos = conversion_begin_pos; pos < key_size; ++pos) {
+    if (!HasAdministrativePredecessor(*lattice, pos)) {
+      continue;
+    }
+
+    if (!HasRitsuSuffixCandidate(*lattice, pos)) {
+      continue;
+    }
+
+    for (Node* node : lattice->begin_nodes(pos)) {
+      if (!IsRitsuHijackNode(pos_matcher_, *node)) {
+        continue;
+      }
+
+      node->wcost += kAdministrativeRitsuPenalty;
+    }
   }
 }
 
