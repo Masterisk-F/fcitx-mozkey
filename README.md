@@ -109,7 +109,7 @@ Main branches
 - ライブ変換は設定画面から ON/OFF と変換開始までの遅延時間を変更可能
 - ライブ変換は入力直後の不要な変換ちらつきを抑えるため、文字入力後に短いデバウンスを挟んで実行
 - 1文字だけの未確定文字列では、助詞などの誤変換を避けるためライブ変換を実行しない
-- 確定済みの左文脈を参照し、`mainにマージしました` のような文脈で助詞が同音漢字・数字候補に負ける挙動を抑制
+- 確定済みの左文脈や直前の文節を参照し、`mainにマージしました` や `2名しかいない` のような文脈で、助詞・機能表現が同音漢字候補に負ける挙動を抑制
 - Windows 版で左 Shift / 右 Shift / 左 Ctrl / 右 Ctrl を個別キーとして設定画面から割り当て可能
 - Windows 版で IMEOn / IMEOff に割り当てたキーを押した場合、すでに同じ状態でも IME モードインジケータを表示
 - Windows 版の候補ウィンドウにダークモード切り替えを追加
@@ -224,6 +224,11 @@ Internally, this fork reconstructs noun-like preceding text as a history segment
 and reranks short particle candidates such as `に`, `を`, `が`, `へ`, and `で`
 against homophone kanji, numeric, symbol, or dakuten-kana candidates.
 
+It also protects common functional expressions such as `しか` followed by a
+negative expression after a noun or quantity-like context.  For example,
+`2めいしかいない` is biased toward `2名しかいない` instead of intermediate
+homophone paths such as `2名司会...`, `2名視界...`, or `2名士会内`.
+
 ### 確定済み左文脈を使った変換補正
 
 この fork では、現在の未確定文字列の直前にある確定済みテキストを、可能な範囲で
@@ -244,6 +249,10 @@ against homophone kanji, numeric, symbol, or dakuten-kana candidates.
 内部的には、名詞相当の確定済み左文脈を history segment として復元し、`に`、`を`、
 `が`、`へ`、`で` などの短い助詞候補が、同音の漢字・数字・記号・濁点付き仮名候補に
 負けにくくなるように候補順位を補正します。
+
+また、名詞や数量表現の後に続く `しか + 否定表現` のような機能表現も保護します。
+たとえば `2めいしかいない` では、途中の `2名司会...`、`2名視界...`、
+`2名士会内` のような同音漢字経路よりも、`2名しかいない` を優先しやすくします。
 
 ### Direct commit for punctuations/symbols
 

@@ -84,22 +84,20 @@ bool IsAsciiOrSymbolLike(absl::string_view text) {
   return true;
 }
 
+bool StartsWith(absl::string_view text, absl::string_view prefix) {
+  return text.size() >= prefix.size() &&
+         text.substr(0, prefix.size()) == prefix;
+}
+
+bool EndsWith(absl::string_view text, absl::string_view suffix) {
+  return text.size() >= suffix.size() &&
+         text.substr(text.size() - suffix.size()) == suffix;
+}
+
 bool IsParticleReading(absl::string_view key) {
   return key == "に" || key == "を" || key == "が" || key == "は" ||
          key == "へ" || key == "で" || key == "と" || key == "の" ||
          key == "も";
-}
-
-bool IsPlainParticleCandidate(const Segment& segment,
-                              const Candidate& candidate) {
-  if (!IsParticleReading(segment.key())) {
-    return false;
-  }
-
-  return candidate.key == segment.key() &&
-         candidate.content_key == segment.key() &&
-         candidate.value == segment.key() &&
-         candidate.content_value == segment.key();
 }
 
 bool IsPlainParticleSurfaceCandidate(const Segment& segment,
@@ -203,6 +201,176 @@ bool NextContextLooksPhraseContinuation(const Segments& segments,
   return false;
 }
 
+bool IsCounterLikeValue(absl::string_view value) {
+  if (value.empty()) {
+    return false;
+  }
+
+  // Counters and noun-like quantifier endings.  This intentionally stays
+  // conservative; it is only used for protecting "しか + negative" after
+  // quantity-like context.
+  return EndsWith(value, "名") || EndsWith(value, "人") ||
+         EndsWith(value, "者") || EndsWith(value, "件") ||
+         EndsWith(value, "個") || EndsWith(value, "つ") ||
+         EndsWith(value, "回") || EndsWith(value, "社") ||
+         EndsWith(value, "点") || EndsWith(value, "円") ||
+         EndsWith(value, "年") || EndsWith(value, "月") ||
+         EndsWith(value, "日") || EndsWith(value, "時") ||
+         EndsWith(value, "分") || EndsWith(value, "秒") ||
+         EndsWith(value, "本") || EndsWith(value, "枚") ||
+         EndsWith(value, "台") || EndsWith(value, "冊") ||
+         EndsWith(value, "通") || EndsWith(value, "行") ||
+         EndsWith(value, "匹") || EndsWith(value, "頭") ||
+         EndsWith(value, "羽");
+}
+
+bool IsShikaIruPrefixKey(absl::string_view key) {
+  // Ambiguous live-conversion prefix:
+  //   しかい...
+  //
+  // This collides heavily with:
+  //   司会
+  //   視界
+  //   歯科医
+  //
+  // Therefore, after an attributive "の" context, do not force hiragana.
+  return StartsWith(key, "しかい");
+}
+
+bool IsShikaExplicitNegativePrefixKey(absl::string_view key) {
+  // Less ambiguous negative-expression prefixes:
+  //   しかない
+  //   しかありません
+  //   しかおらない
+  //   しかおりません
+  return StartsWith(key, "しかな") || StartsWith(key, "しかあり") ||
+         StartsWith(key, "しかお");
+}
+
+bool PreviousValueLooksShikaCompatible(absl::string_view value,
+                                       absl::string_view current_key) {
+  if (value.empty()) {
+    return false;
+  }
+
+  // Do not rewrite ordinary attributive "の + しかい..." contexts:
+  //   次のしかい    -> 次の司会
+  //   会議のしかい  -> 会議の司会
+  //   山田のしかい  -> 山田の司会
+  //
+  // But allow explicit negative expressions:
+  //   山田のしかない
+  //   これのしかない
+  //
+  // The key distinction is that "しかい..." is still highly ambiguous with
+  // "司会/視界/歯科医", while "しかな..." and "しかあり..." already express
+  // the negative construction.
+  if (EndsWith(value, "の") && IsShikaIruPrefixKey(current_key)) {
+    return false;
+  }
+
+  if (ContainsNumber(value) || IsCounterLikeValue(value)) {
+    return true;
+  }
+
+  // Noun-like context:
+  //   山田しかいない
+  //   東京しかない
+  //   mainしかない
+  return ContainsKanji(value) || ContainsKatakana(value) ||
+         IsAsciiOrSymbolLike(value);
+}
+
+bool PreviousContextLooksShikaCompatible(const Segments& segments,
+                                         size_t conversion_index,
+                                         absl::string_view current_key) {
+  if (conversion_index == 0) {
+    if (!HasHistorySegment(segments)) {
+      return false;
+    }
+
+    const Segment& history = segments.segment(0);
+    const Candidate& candidate = history.candidate(0);
+    return PreviousValueLooksShikaCompatible(candidate.value, current_key);
+  }
+
+  const Segment& previous = segments.conversion_segment(conversion_index - 1);
+  if (previous.candidates_size() == 0) {
+    return false;
+  }
+
+  const Candidate& previous_top = previous.candidate(0);
+  return PreviousValueLooksShikaCompatible(previous_top.value, current_key);
+}
+
+bool IsShikaParticleLikeKey(absl::string_view key) {
+  return key == "しか" || EndsWith(key, "しか");
+}
+
+bool IsShikaNegativePrefixKey(absl::string_view key) {
+  // Protect live-conversion prefixes of:
+  //   しかいない / しかいません
+  //   しかない
+  //   しかありません
+  //   しかおらない / しかおりません
+  return IsShikaIruPrefixKey(key) || IsShikaExplicitNegativePrefixKey(key);
+}
+
+bool IsShikaFunctionalCandidate(const Segment& segment,
+                                const Candidate& candidate) {
+  const absl::string_view key = segment.key();
+
+  if (IsShikaParticleLikeKey(key)) {
+    return EndsWith(candidate.value, "しか") &&
+           EndsWith(candidate.content_value, "しか");
+  }
+
+  if (IsShikaNegativePrefixKey(key)) {
+    return StartsWith(candidate.value, "しか") &&
+           StartsWith(candidate.content_value, "しか") &&
+           IsPureHiragana(candidate.value);
+  }
+
+  return false;
+}
+
+bool IsSuspiciousCandidateForShikaNegative(const Segment& segment,
+                                           const Candidate& candidate) {
+  if (IsShikaFunctionalCandidate(segment, candidate)) {
+    return false;
+  }
+
+  const absl::string_view key = segment.key();
+
+  if (IsShikaParticleLikeKey(key)) {
+    // Examples to demote after quantity-like context:
+    //   名歯科, 名士か, 名師か, 名史か
+    return ContainsKanji(candidate.value) || ContainsKatakana(candidate.value) ||
+           ContainsNumber(candidate.value) || !IsPureHiragana(candidate.value);
+  }
+
+  if (IsShikaNegativePrefixKey(key)) {
+    // Examples to demote after quantity-like context:
+    //   司会, 視界, 歯科医, 視界内, 士会内
+    return ContainsKanji(candidate.value) || ContainsKatakana(candidate.value) ||
+           ContainsNumber(candidate.value) || !IsPureHiragana(candidate.value);
+  }
+
+  return false;
+}
+
+int ShikaNegativeBonus(absl::string_view key) {
+  if (IsShikaNegativePrefixKey(key)) {
+    return 7000;
+  }
+
+  if (IsShikaParticleLikeKey(key)) {
+    return 5000;
+  }
+
+  return 0;
+}
+
 int ParticleBonus(absl::string_view key) {
   if (key == "に" || key == "を" || key == "が" || key == "へ" ||
       key == "で") {
@@ -250,7 +418,7 @@ void RerankParticleSegmentAfterContext(const Segments& segments,
 
   int plain_particle_index = -1;
   for (int i = 0; i < segment->candidates_size(); ++i) {
-    if (IsPlainParticleCandidate(*segment, segment->candidate(i))) {
+    if (IsPlainParticleSurfaceCandidate(*segment, segment->candidate(i))) {
       plain_particle_index = i;
       break;
     }
@@ -300,6 +468,79 @@ void RerankParticleSegmentAfterContext(const Segments& segments,
   }
 }
 
+void RerankShikaNegativeExpressionAfterContext(const Segments& segments,
+                                               size_t conversion_index,
+                                               Segment* segment) {
+  if (segment == nullptr) {
+    return;
+  }
+
+  if (segment->candidates_size() <= 1) {
+    return;
+  }
+
+  if (!IsShikaParticleLikeKey(segment->key()) &&
+      !IsShikaNegativePrefixKey(segment->key())) {
+    return;
+  }
+
+  if (!PreviousContextLooksShikaCompatible(segments, conversion_index,
+                                           segment->key())) {
+    return;
+  }
+
+  int functional_candidate_index = -1;
+  for (int i = 0; i < segment->candidates_size(); ++i) {
+    if (IsShikaFunctionalCandidate(*segment, segment->candidate(i))) {
+      functional_candidate_index = i;
+      break;
+    }
+  }
+
+  if (functional_candidate_index < 0) {
+    return;
+  }
+
+  std::vector<CandidateScore> scores;
+  scores.reserve(segment->candidates_size());
+
+  const int bonus = ShikaNegativeBonus(segment->key());
+
+  for (int i = 0; i < segment->candidates_size(); ++i) {
+    const Candidate& candidate = segment->candidate(i);
+
+    int adjusted_cost = candidate.cost;
+
+    if (IsShikaFunctionalCandidate(*segment, candidate)) {
+      adjusted_cost -= bonus;
+    } else if (IsSuspiciousCandidateForShikaNegative(*segment, candidate)) {
+      adjusted_cost += bonus;
+    }
+
+    scores.push_back({i, adjusted_cost});
+  }
+
+  std::stable_sort(scores.begin(), scores.end(),
+                   [](const CandidateScore& lhs, const CandidateScore& rhs) {
+                     return lhs.adjusted_cost < rhs.adjusted_cost;
+                   });
+
+  // If the top candidate does not change, avoid unnecessary mutation.
+  if (scores.empty() || scores[0].index == 0) {
+    return;
+  }
+
+  std::vector<Candidate> reordered;
+  reordered.reserve(segment->candidates_size());
+  for (const CandidateScore& score : scores) {
+    reordered.push_back(segment->candidate(score.index));
+  }
+
+  for (int i = 0; i < static_cast<int>(reordered.size()); ++i) {
+    *segment->mutable_candidate(i) = reordered[i];
+  }
+}
+
 }  // namespace
 
 void ContextualCandidateReranker::Rerank(Segments* segments) const {
@@ -310,6 +551,7 @@ void ContextualCandidateReranker::Rerank(Segments* segments) const {
   for (size_t i = 0; i < segments->conversion_segments_size(); ++i) {
     Segment* segment = segments->mutable_conversion_segment(i);
     RerankParticleSegmentAfterContext(*segments, i, segment);
+    RerankShikaNegativeExpressionAfterContext(*segments, i, segment);
   }
 }
 
