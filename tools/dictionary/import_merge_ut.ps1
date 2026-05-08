@@ -1,8 +1,8 @@
 ﻿param(
     [ValidateSet("sample", "safe", "daily", "rich", "max")]
     [string]$Profile = "sample",
-
-    [int]$SampleLines = 5000
+    [int]$SampleLines = 5000,
+    [string]$BashPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -26,49 +26,98 @@ Write-Host "Profile: $EffectiveProfile"
 New-Item -ItemType Directory -Force $WorkRoot | Out-Null
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 
+function Test-IsWindowsHost {
+    if ($PSVersionTable.ContainsKey("Platform")) {
+        return $PSVersionTable.Platform -eq "Win32NT"
+    }
+
+    return $env:OS -eq "Windows_NT"
+}
+
+function Test-BashPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path
+    )
+
+    if (-not (Test-Path $Path)) {
+        return $false
+    }
+
+    try {
+        $Output = & $Path -lc "printf MOZC_BASH_OK" 2>$null
+        return ($LASTEXITCODE -eq 0 -and $Output -eq "MOZC_BASH_OK")
+    } catch {
+        return $false
+    }
+}
+
 function Find-Bash {
-    if ($IsWindows) {
-        $GitBashCandidates = @(
+    param(
+        [string]$RequestedBashPath = ""
+    )
+
+    if ($RequestedBashPath) {
+        if (Test-BashPath $RequestedBashPath) {
+            return (Resolve-Path $RequestedBashPath).Path
+        }
+        throw "Specified bash is not usable: $RequestedBashPath"
+    }
+
+    if (Test-IsWindowsHost) {
+        $BashCandidates = @(
+            (Join-Path $RepoRoot "src\third_party\msys64\usr\bin\bash.exe"),
+            (Join-Path $RepoRoot "src\third_party\msys64\bin\bash.exe"),
             "C:\Program Files\Git\bin\bash.exe",
             "C:\Program Files\Git\usr\bin\bash.exe",
             "C:\Program Files (x86)\Git\bin\bash.exe",
             "C:\Program Files (x86)\Git\usr\bin\bash.exe"
         )
 
-        $BashPath = $GitBashCandidates |
-            Where-Object { Test-Path $_ } |
-            Select-Object -First 1
-
-        if ($BashPath) {
-            return $BashPath
+        foreach ($Candidate in $BashCandidates) {
+            if (Test-BashPath $Candidate) {
+                return (Resolve-Path $Candidate).Path
+            }
         }
 
-        $Command = Get-Command bash.exe -ErrorAction SilentlyContinue
-        if ($Command) {
-            return $Command.Source
+        $PathBashes = @(Get-Command bash.exe -ErrorAction SilentlyContinue)
+        foreach ($Command in $PathBashes) {
+            $Source = $Command.Source
+
+            # Do not select WSL bash launchers blindly. They depend on the
+            # default WSL distribution and may resolve to docker-desktop,
+            # which is not a normal Linux user environment.
+            if ($Source -like "$env:WINDIR\System32\bash.exe" -or
+                $Source -like "$env:LOCALAPPDATA\Microsoft\WindowsApps\bash.exe") {
+                if (Test-BashPath $Source) {
+                    return $Source
+                }
+                continue
+            }
+
+            if (Test-BashPath $Source) {
+                return $Source
+            }
         }
 
-        throw "Git Bash was not found. Install Git for Windows or make sure bash.exe is available in PATH."
+        throw "Usable bash was not found. Install Git for Windows, use Mozc's MSYS bash, or pass -BashPath explicitly."
     }
 
     $Command = Get-Command bash -ErrorAction SilentlyContinue
-    if ($Command) {
+    if ($Command -and (Test-BashPath $Command.Source)) {
         return $Command.Source
     }
 
-    if (Test-Path "/bin/bash") {
-        return "/bin/bash"
+    foreach ($Candidate in @("/bin/bash", "/usr/bin/bash")) {
+        if (Test-BashPath $Candidate) {
+            return $Candidate
+        }
     }
 
-    if (Test-Path "/usr/bin/bash") {
-        return "/usr/bin/bash"
-    }
-
-    throw "bash was not found. Install bash or make sure it is available in PATH."
+    throw "Usable bash was not found."
 }
 
-$BashPath = Find-Bash
-
+$BashPath = Find-Bash -RequestedBashPath $BashPath
 Write-Host "Using bash: $BashPath"
 
 if (-not (Test-Path $MergeRepo)) {

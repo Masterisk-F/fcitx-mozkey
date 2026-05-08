@@ -1,6 +1,7 @@
 param(
     [int]$SampleLines = 5000,
-    [switch]$SkipDownload
+    [switch]$SkipDownload,
+    [string]$BashPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,7 +13,16 @@ Write-Host ""
 
 if (-not $SkipDownload) {
     Write-Host "Step 1: Import merge-ut sample profile..."
-    & (Join-Path $RepoRoot "tools\dictionary\import_merge_ut.ps1") -Profile sample -SampleLines $SampleLines
+    $ImportMergeUtArgs = @{
+        Profile = "sample"
+        SampleLines = $SampleLines
+    }
+
+    if ($BashPath) {
+        $ImportMergeUtArgs.BashPath = $BashPath
+    }
+
+    & (Join-Path $RepoRoot "tools\dictionary\import_merge_ut.ps1") @ImportMergeUtArgs
 
     Write-Host ""
     Write-Host "Step 2: Import nico/pixiv dictionary..."
