@@ -109,6 +109,7 @@ Main branches
 - ライブ変換は設定画面から ON/OFF と変換開始までの遅延時間を変更可能
 - ライブ変換は入力直後の不要な変換ちらつきを抑えるため、文字入力後に短いデバウンスを挟んで実行
 - 1文字だけの未確定文字列では、助詞などの誤変換を避けるためライブ変換を実行しない
+- `え~`、`えー`、`ん？` のような「かな1文字 + 装飾的な末尾記号」でも、短すぎる漢字化を避けるためライブ変換を抑制
 - 確定済みの左文脈や直前の文節、限定的な右文脈を参照し、`mainにマージしました`、`githubには`、`2名しかいない`、`追記したい`、`山梨県立美術館`、`滋賀方面` のような文脈で、助詞・複合機能語・機能表現・接尾的な語構成・地名接尾構成が同音漢字候補に負ける挙動を抑制
 - Windows 版で左 Shift / 右 Shift / 左 Ctrl / 右 Ctrl を個別キーとして設定画面から割り当て可能
 - Windows 版で IMEOn / IMEOff に割り当てたキーを押した場合、すでに同じ状態でも IME モードインジケータを表示
@@ -173,6 +174,8 @@ With live conversion enabled, Mozc automatically converts the current compositio
 
 To reduce distracting intermediate conversions, this fork applies live conversion after a short configurable debounce delay instead of converting every character immediately. Single-character compositions are not live-converted, because they are often particles such as `に`, `を`, or `が`.
 
+Live conversion is also suppressed for very short kana compositions followed only by decorative trailing symbols, such as `え~`, `えー`, or `ん？`. This avoids noisy intermediate conversions such as `え~` becoming `絵～` while the user is still typing.
+
 For example:
 
 - Type `kyouha`
@@ -190,6 +193,8 @@ The live conversion feature can be enabled or disabled from the config dialog. T
 ライブ変換を有効にすると、スペースキーを押さなくても、入力中の未確定文字列が自動で変換されます。
 
 入力途中の不要な中間変換表示を抑えるため、この fork では文字入力後に短い設定可能なデバウンス時間を挟んでからライブ変換を実行します。`に`、`を`、`が` のような助詞として使われやすい入力を誤って漢字化しないように、1文字だけの未確定文字列ではライブ変換を行いません。
+
+また、`え~`、`えー`、`ん？` のように、かな1文字の後ろに装飾的な記号だけが続く場合もライブ変換を抑制します。これにより、入力途中の `え~` が `絵～` のように短すぎる漢字候補へ変換される挙動を避けます。
 
 たとえば:
 
@@ -438,6 +443,12 @@ The daily local dictionary can be generated from:
 Large generated dictionary files are not committed to this repository.
 They are generated locally under `src/data/dictionary_koyasi/generated/`.
 
+Before building a package with the enhanced dictionary enabled, regenerate the daily dictionary locally:
+
+```powershell
+.\tools\dictionary\prepare_daily_dictionary.ps1
+```
+
 See:
 
 - [Koyasi Dictionary Data](src/data/dictionary_koyasi/README.md)
@@ -462,6 +473,12 @@ daily local 辞書は主に以下を元に生成できます。
 
 巨大な生成辞書ファイルは、このリポジトリには commit しません。
 `src/data/dictionary_koyasi/generated/` 以下にローカル生成します。
+
+強化辞書を有効にした状態で package build する前に、daily 辞書をローカルで再生成してください。
+
+```powershell
+.\tools\dictionary\prepare_daily_dictionary.ps1
+```
 
 詳細:
 

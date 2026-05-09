@@ -113,6 +113,69 @@ constexpr uint32_t kMaxLiveConversionDelayMillisec = 1000;
 // and converting it to a kanji such as 「二」 too eagerly is noisy.
 constexpr size_t kMinLiveConversionCompositionLength = 2;
 
+bool IsLiveConversionTrailingDecorativeSymbol(char32_t c) {
+  switch (c) {
+    case 0x007E:  // ~
+    case 0xFF5E:  // ～
+    case 0x301C:  // 〜
+    case 0x30FC:  // ー
+    case 0x2015:  // ―
+    case 0x2026:  // …
+    case 0x0021:  // !
+    case 0xFF01:  // ！
+    case 0x003F:  // ?
+    case 0xFF1F:  // ？
+    case 0x3002:  // 。
+    case 0x3001:  // 、
+    case 0x002C:  // ,
+    case 0xFF0C:  // ，
+    case 0x002E:  // .
+    case 0xFF0E:  // ．
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool ShouldSkipLiveConversionForCompositionKey(absl::string_view key) {
+  if (Util::CharsLen(key) < kMinLiveConversionCompositionLength) {
+    return true;
+  }
+
+  absl::string_view core = key;
+  bool has_decorative_tail = false;
+
+  while (!core.empty()) {
+    absl::string_view rest;
+    char32_t last = 0;
+    if (!Util::SplitLastChar32(core, &rest, &last)) {
+      break;
+    }
+    if (!IsLiveConversionTrailingDecorativeSymbol(last)) {
+      break;
+    }
+    has_decorative_tail = true;
+    core = rest;
+  }
+
+  if (!has_decorative_tail) {
+    return false;
+  }
+
+  // Pure symbol sequences such as "~~" do not need live conversion.
+  if (core.empty()) {
+    return true;
+  }
+
+  // "え~", "へー", "ん？" should stay as kana while typing.
+  // But longer readings such as "きょう~" may still be live-converted.
+  if (Util::CharsLen(core) >= kMinLiveConversionCompositionLength) {
+    return false;
+  }
+
+  return Util::IsScriptType(core, Util::HIRAGANA);
+}
+
 uint32_t GetLiveConversionDelayMillisec(const config::Config& config) {
   if (!config.has_live_conversion_delay_msec()) {
     return kDefaultLiveConversionDelayMillisec;
@@ -1676,15 +1739,16 @@ bool Session::MaybeStartLiveConversion(commands::Command* command) {
   }
 
   const size_t length = context_->composer().GetLength();
-  if (length < kMinLiveConversionCompositionLength ||
+  const std::string live_conversion_key =
+      context_->composer().GetQueryForConversion();
+
+  if (ShouldSkipLiveConversionForCompositionKey(live_conversion_key) ||
       length != context_->composer().GetCursor()) {
     return false;
   }
 
   // Capture the raw composition before Convert(). These strings are the stable
   // source for the next pending-suffix display.
-  const std::string live_conversion_key =
-      context_->composer().GetQueryForConversion();
   const std::string live_conversion_preedit =
       context_->composer().GetStringForPreedit();
 
@@ -1828,7 +1892,9 @@ bool Session::MaybeScheduleLiveConversion(commands::Command* command) {
   }
 
   const size_t length = context_->composer().GetLength();
-  if (length < kMinLiveConversionCompositionLength ||
+  const std::string key = context_->composer().GetQueryForConversion();
+
+  if (ShouldSkipLiveConversionForCompositionKey(key) ||
       length != context_->composer().GetCursor()) {
     return false;
   }
@@ -1842,7 +1908,7 @@ bool Session::MaybeScheduleLiveConversion(commands::Command* command) {
   ++live_conversion_generation_;
   live_conversion_pending_ = true;
   pending_live_conversion_generation_ = live_conversion_generation_;
-  pending_live_conversion_key_ = context_->composer().GetQueryForConversion();
+  pending_live_conversion_key_ = key;
 
   if (!OutputPendingLiveConversion(command)) {
     // Avoid showing raw hiragana fallback. If pending display cannot be built
@@ -1908,7 +1974,7 @@ bool Session::ApplyDelayedLiveConversion(commands::Command* command) {
   }
 
   const size_t length = context_->composer().GetLength();
-  if (length < kMinLiveConversionCompositionLength ||
+  if (ShouldSkipLiveConversionForCompositionKey(current_key) ||
       length != context_->composer().GetCursor()) {
     return IgnoreStaleDelayedLiveConversion(command);
   }
@@ -1927,7 +1993,8 @@ bool Session::FlushPendingLiveConversion() {
   }
 
   const std::string current_key = context_->composer().GetQueryForConversion();
-  if (current_key != pending_live_conversion_key_) {
+  if (current_key != pending_live_conversion_key_ ||
+      ShouldSkipLiveConversionForCompositionKey(current_key)) {
     CancelPendingLiveConversion();
     return false;
   }
