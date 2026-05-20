@@ -38,6 +38,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
 #include "composer/composition_input.h"
+#include "config/character_form_manager.h"
 #include "composer/table.h"
 #include "composer/transliterators.h"
 #include "testing/gmock.h"
@@ -45,6 +46,21 @@
 
 namespace mozc {
 namespace composer {
+namespace {
+
+class CharacterFormManagerTestEnvironment : public ::testing::Environment {
+ public:
+  void SetUp() override {
+    ::mozc::config::CharacterFormManager::GetCharacterFormManager()
+        ->SetDefaultRule();
+  }
+};
+
+::testing::Environment* const kCharacterFormManagerTestEnvironment =
+    ::testing::AddGlobalTestEnvironment(
+        new CharacterFormManagerTestEnvironment);
+
+}  // namespace
 
 MATCHER(Loop, "") { return arg.first; }
 MATCHER(NoLoop, "") { return !arg.first; }
