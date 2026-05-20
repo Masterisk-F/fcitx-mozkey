@@ -76,6 +76,12 @@ using mozc::config::Config;
 // less<> is necessary to compare between std::string and absl::string_view.
 using SetOfString = std::set<std::string, std::less<>>;
 
+@interface MozcImkInputController ()
+- (void)cancelDelayedSessionCommand;
+- (void)delayedInvokeSessionCommandFromTimer:(NSTimer *)timer;
+- (void)dispatchSessionCommand:(const SessionCommand *)command client:(id)sender;
+@end
+
 namespace {
 // Global object used as a singleton used as a proxy to receive messages from
 // the renderer process.
@@ -309,6 +315,7 @@ int32_t GetRendererAnchorPosition(const Output &output) {
 }
 
 - (void)dealloc {
+  [self cancelDelayedSessionCommand];
   keyCodeMap_ = nil;
   originalString_ = nil;
   composedString_ = nil;
@@ -364,6 +371,8 @@ int32_t GetRendererAnchorPosition(const Output &output) {
   if (imkClientForTest_) {
     return;
   }
+
+  [self cancelDelayedSessionCommand];
 
   RendererCommand clearCommand;
   clearCommand.set_type(RendererCommand::UPDATE);
@@ -677,16 +686,56 @@ int32_t GetRendererAnchorPosition(const Output &output) {
 
   // Handle callbacks.
   if (output->has_callback() && output->callback().has_session_command()) {
-    const SessionCommand &callback_command = output->callback().session_command();
-    if (callback_command.type() == SessionCommand::CONVERT_REVERSE) {
-      [self invokeReconvert:&callback_command client:sender];
-    } else if (callback_command.type() == SessionCommand::UNDO) {
-      [self invokeUndo:sender];
+    const Output::Callback &callback = output->callback();
+    const SessionCommand &callback_command = callback.session_command();
+    if (callback.has_delay_millisec() && callback.delay_millisec() > 0) {
+      [self cancelDelayedSessionCommand];
+      delayedSessionCommand_ = std::make_unique<SessionCommand>(callback_command);
+      delayedSessionCommandClient_ = sender;
+      const NSTimeInterval delay =
+          static_cast<NSTimeInterval>(callback.delay_millisec()) / 1000.0;
+      delayedSessionCommandTimer_ =
+          [NSTimer scheduledTimerWithTimeInterval:delay
+                                           target:self
+                                         selector:@selector(delayedInvokeSessionCommandFromTimer:)
+                                         userInfo:nil
+                                          repeats:NO];
     } else {
-      Output output_for_callback;
-      if (mozcClient_->SendCommand(callback_command, &output_for_callback)) {
-        [self processOutput:&output_for_callback client:sender];
-      }
+      [self dispatchSessionCommand:&callback_command client:sender];
+    }
+  }
+}
+
+- (void)cancelDelayedSessionCommand {
+  [delayedSessionCommandTimer_ invalidate];
+  delayedSessionCommandTimer_ = nil;
+  delayedSessionCommand_.reset();
+  delayedSessionCommandClient_ = nil;
+}
+
+- (void)delayedInvokeSessionCommandFromTimer:(NSTimer *)timer {
+  if (timer != delayedSessionCommandTimer_) {
+    return;
+  }
+  if (!delayedSessionCommand_) {
+    return;
+  }
+
+  SessionCommand command = *delayedSessionCommand_;
+  id sender = delayedSessionCommandClient_;
+  [self cancelDelayedSessionCommand];
+  [self dispatchSessionCommand:&command client:sender];
+}
+
+- (void)dispatchSessionCommand:(const SessionCommand *)command client:(id)sender {
+  if (command->type() == SessionCommand::CONVERT_REVERSE) {
+    [self invokeReconvert:command client:sender];
+  } else if (command->type() == SessionCommand::UNDO) {
+    [self invokeUndo:sender];
+  } else {
+    Output output_for_callback;
+    if (mozcClient_->SendCommand(*command, &output_for_callback)) {
+      [self processOutput:&output_for_callback client:sender];
     }
   }
 }

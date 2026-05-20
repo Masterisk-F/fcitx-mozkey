@@ -104,6 +104,11 @@
   /** True after explicit conversion request so candidate UI may be shown. */
   bool allowCandidateWindowForLiveConversion_;
 
+  /** Latest delayed callback requested by Output::Callback. */
+  std::unique_ptr<mozc::commands::SessionCommand> delayedSessionCommand_;
+  __weak id delayedSessionCommandClient_;
+  NSTimer *delayedSessionCommandTimer_;
+
   /** |mozcClient_| manages connection to the mozc server. */
   std::unique_ptr<mozc::client::ClientInterface> mozcClient_;
 
