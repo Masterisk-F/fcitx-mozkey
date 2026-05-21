@@ -173,6 +173,7 @@ mozc_cc_library(
     tags = MOZC_TAGS.WIN_ONLY,
     target_compatible_with = ["@platforms//os:windows"],
     visibility = [
+        "//gui/config_dialog:__subpackages__",
         "//gui/tool:__subpackages__",
         "//renderer/win32:__subpackages__",
         "//server:__pkg__",
