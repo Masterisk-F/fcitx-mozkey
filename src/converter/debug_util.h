@@ -27,48 +27,22 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef MOZC_RENDERER_QT_QT_SERVER_H_
-#define MOZC_RENDERER_QT_QT_SERVER_H_
+#ifndef MOZC_CONVERTER_DEBUG_UTIL_H_
+#define MOZC_CONVERTER_DEBUG_UTIL_H_
 
 #include <string>
 
-#include "absl/strings/string_view.h"
-#include "renderer/qt/qt_ipc_thread.h"
-#include "renderer/qt/qt_window_manager.h"
+#include "converter/lattice.h"
 
 namespace mozc {
-namespace renderer {
+namespace converter {
 
-class QtServer : public QObject {
-  Q_OBJECT
+// Dumps all nodes in the given lattice in TSV format.
+// The output format includes id, key, value, begin_pos, end_pos, lid, rid,
+// wcost, cost, bnext, enext, prev, and next for each node.
+std::string DumpNodes(const Lattice& lattice);
 
- public:
-  QtServer();
-  QtServer(const QtServer&) = delete;
-  QtServer& operator=(const QtServer&) = delete;
-  ~QtServer() override;
-
-  int StartServer(int argc, char** argv);
-
-  void AsyncExecCommand(absl::string_view command);
-
- public slots:
-  void Update(std::string command);
-
- signals:
-  void EmitUpdated(std::string command);
-
- protected:
-  // Call ExecCommandInternal() from the implementation
-  // of AsyncExecCommand()
-  bool ExecCommandInternal(const commands::RendererCommand& command);
-
-  QtWindowManager renderer_;
-
- private:
-  QtIpcThread ipc_thread_;
-};
-
-}  // namespace renderer
+}  // namespace converter
 }  // namespace mozc
-#endif  // MOZC_RENDERER_QT_QT_SERVER_H_
+
+#endif  // MOZC_CONVERTER_DEBUG_UTIL_H_

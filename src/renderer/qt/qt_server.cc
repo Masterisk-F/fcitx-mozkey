@@ -35,12 +35,10 @@
 
 #include <QApplication>
 #include <QMetaType>
-#include <algorithm>
-#include <cstdint>
 #include <string>
 
-#include "absl/flags/flag.h"
 #include "absl/log/log.h"
+#include "absl/strings/string_view.h"
 #include "base/system_util.h"
 #include "base/vlog.h"
 #include "ipc/named_event.h"
@@ -51,12 +49,6 @@
 #ifndef NDEBUG
 #include "config/config_handler.h"
 #endif  // NDEBUG
-
-// By default, mozc_renderer quits when user-input continues to be
-// idle for 10min.
-ABSL_FLAG(int32_t, timeout, 10 * 60, "timeout of candidate server (sec)");
-ABSL_FLAG(bool, restricted, false,
-          "launch candidates server with restricted mode");
 
 Q_DECLARE_METATYPE(std::string);
 
@@ -77,16 +69,7 @@ std::string GetServiceName() {
 }
 }  // namespace
 
-QtServer::QtServer() : timeout_(0) {
-  if (absl::GetFlag(FLAGS_restricted)) {
-    absl::SetFlag(&FLAGS_timeout,
-                  // set 60 sec with restricted mode
-                  std::min(absl::GetFlag(FLAGS_timeout), 60));
-  }
-
-  timeout_ = 1000 * std::clamp(absl::GetFlag(FLAGS_timeout), 3, 24 * 60 * 60);
-  MOZC_VLOG(2) << "timeout is set to be : " << timeout_;
-
+QtServer::QtServer() {
 #ifndef NDEBUG
   mozc::internal::SetConfigVLogLevel(
       config::ConfigHandler::GetSharedConfig()->verbose_level());
@@ -95,8 +78,8 @@ QtServer::QtServer() : timeout_(0) {
 
 QtServer::~QtServer() = default;
 
-void QtServer::AsyncExecCommand(const std::string &command) {
-  emit EmitUpdated(command);
+void QtServer::AsyncExecCommand(absl::string_view command) {
+  emit EmitUpdated(std::string(command));
 }
 
 void QtServer::Update(std::string command) {
@@ -108,7 +91,7 @@ void QtServer::Update(std::string command) {
   ExecCommandInternal(protocol);
 }
 
-int QtServer::StartServer(int argc, char **argv) {
+int QtServer::StartServer(int argc, char** argv) {
 #if defined(__linux__) && !defined(__ANDROID__)
   // |QWidget::move()| never works with wayland platform backend. Always use
   // 'xcb' platform backend.  https://github.com/google/mozc/issues/794
@@ -120,7 +103,7 @@ int QtServer::StartServer(int argc, char **argv) {
 
   // send "ready" event to the client
   const std::string name = GetServiceName();
-  NamedEventNotifier notifier(name.c_str());
+  NamedEventNotifier notifier(name);
   notifier.Notify();
 
   renderer_.Initialize();
@@ -129,13 +112,11 @@ int QtServer::StartServer(int argc, char **argv) {
   return app.exec();
 }
 
-bool QtServer::ExecCommandInternal(const commands::RendererCommand &command) {
+bool QtServer::ExecCommandInternal(const commands::RendererCommand& command) {
   MOZC_VLOG(2) << command;
 
   return renderer_.ExecCommand(command);
 }
-
-uint32_t QtServer::timeout() const { return timeout_; }
 
 }  // namespace renderer
 }  // namespace mozc

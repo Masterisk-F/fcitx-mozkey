@@ -224,7 +224,6 @@ mozc_cc_library(
     ],
     deps = [
         "//base:bits",
-        "//data_manager",
         "//storage/louds:simple_succinct_bit_vector_index",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -369,7 +368,6 @@ mozc_cc_library(
     deps = [
         ":node",
         "//base/container:bitarray",
-        "//data_manager",
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/types:span",
     ],
@@ -565,6 +563,7 @@ mozc_cc_test(
         ":segments",
         ":segments_matchers",
         "//base:util",
+        "//base/container:tuple",
         "//composer",
         "//composer:table",
         "//config:config_handler",
@@ -745,7 +744,6 @@ mozc_cc_binary(
         "//base:file_util",
         "//base:init_mozc",
         "//base:number_util",
-        "//base:singleton",
         "//base:system_util",
         "//base/container:flat_set",
         "//base/protobuf:text_format",
@@ -761,6 +759,7 @@ mozc_cc_binary(
         "//protocol:engine_builder_cc_proto",
         "//request:conversion_request",
         "//request:request_test_util",
+        "@com_google_absl//absl/base:no_destructor",
         "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/log:check",
@@ -778,6 +777,7 @@ mozc_cc_binary(
     testonly = True,
     srcs = ["immutable_converter_main.cc"],
     deps = [
+        ":debug_util",
         ":immutable_converter",
         ":lattice",
         ":node",
@@ -984,4 +984,28 @@ bzl_library(
     name = "evalution_bzl",
     srcs = ["evaluation.bzl"],
     test_size = "small",
+)
+
+mozc_cc_library(
+    name = "debug_util",
+    srcs = ["debug_util.cc"],
+    hdrs = ["debug_util.h"],
+    deps = [
+        ":lattice",
+        ":node",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+mozc_cc_test(
+    name = "debug_util_test",
+    srcs = ["debug_util_test.cc"],
+    deps = [
+        ":debug_util",
+        ":lattice",
+        ":node",
+        "//testing:gunit_main",
+    ],
 )

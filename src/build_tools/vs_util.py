@@ -77,6 +77,14 @@ def get_vcvarsall(
         r' --vcvarsall_path=C:\VS\VC\Auxiliary\Build\vcvarsall.bat'
     )
 
+  # Default to '[17,19)' so that vswhere -latest picks VS 2026 when
+  # available and falls back to VS 2022 otherwise. Setting MOZC_USE_VS2022
+  # narrows the range to '[17,18)' to pin to VS 2022 even on machines that
+  # also have VS 2026 installed.
+  # See https://github.com/microsoft/vswhere/wiki/Versions
+  version_filter = (
+      '[17,18)' if os.environ.get('MOZC_USE_VS2022') else '[17,19)'
+  )
   cmd = [
       str(vswhere_path),
       '-products',
@@ -87,7 +95,7 @@ def get_vcvarsall(
       '-find',
       'VC/Auxiliary/Build/vcvarsall.bat',
       '-version',
-      '[17,19)',  # See https://github.com/microsoft/vswhere/wiki/Versions
+      version_filter,
       '-latest',
       '-utf8',
   ]
@@ -194,7 +202,7 @@ def get_vs_env_vars(
 def get_vc_dir(
     arch: str, vcvarsall_path_hint: Union[str, None] = None
 ) -> pathlib.Path:
-  """Returns the VC directory path for use as 'BAZEL_VC'.
+  r"""Returns the VC directory path for use as 'BAZEL_VC'.
 
   Args:
     arch: host/target architecture

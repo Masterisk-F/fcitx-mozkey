@@ -27,48 +27,45 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef MOZC_RENDERER_QT_QT_SERVER_H_
-#define MOZC_RENDERER_QT_QT_SERVER_H_
+#include "converter/debug_util.h"
 
 #include <string>
 
-#include "absl/strings/string_view.h"
-#include "renderer/qt/qt_ipc_thread.h"
-#include "renderer/qt/qt_window_manager.h"
+#include "converter/lattice.h"
+#include "converter/node.h"
+#include "testing/gunit.h"
 
 namespace mozc {
-namespace renderer {
+namespace converter {
+namespace {
 
-class QtServer : public QObject {
-  Q_OBJECT
+TEST(DebugUtilTest, DumpNodesEmpty) {
+  Lattice lattice;
+  lattice.SetKey("");
 
- public:
-  QtServer();
-  QtServer(const QtServer&) = delete;
-  QtServer& operator=(const QtServer&) = delete;
-  ~QtServer() override;
+  const std::string dump = DumpNodes(lattice);
+  EXPECT_FALSE(dump.empty());
+  // The header and BOS node should be output.
+  EXPECT_NE(dump.find("BOS"), std::string::npos);
+}
 
-  int StartServer(int argc, char** argv);
+TEST(DebugUtilTest, DumpNodesSimple) {
+  Lattice lattice;
+  lattice.SetKey("a");
 
-  void AsyncExecCommand(absl::string_view command);
+  Node* n1 = lattice.NewNode();
+  n1->key = "a";
+  n1->value = "A";
+  n1->begin_pos = 0;
+  n1->end_pos = 1;
+  lattice.Insert(0, n1);
 
- public slots:
-  void Update(std::string command);
+  const std::string dump = DumpNodes(lattice);
+  EXPECT_FALSE(dump.empty());
+  EXPECT_NE(dump.find("BOS"), std::string::npos);
+  EXPECT_NE(dump.find("\ta\tA\t"), std::string::npos);
+}
 
- signals:
-  void EmitUpdated(std::string command);
-
- protected:
-  // Call ExecCommandInternal() from the implementation
-  // of AsyncExecCommand()
-  bool ExecCommandInternal(const commands::RendererCommand& command);
-
-  QtWindowManager renderer_;
-
- private:
-  QtIpcThread ipc_thread_;
-};
-
-}  // namespace renderer
+}  // namespace
+}  // namespace converter
 }  // namespace mozc
-#endif  // MOZC_RENDERER_QT_QT_SERVER_H_

@@ -239,7 +239,11 @@ mozc_cc_qt_library(
         ":config_dialog",
         "//base:init_mozc",
         "//gui/base:gui_base",
-    ],
+    ] + mozc_select(
+        windows = [
+            "//base/win32:winmain",
+        ],
+    ),
 )
 
 mozc_cc_qt_binary(

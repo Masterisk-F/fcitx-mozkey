@@ -113,6 +113,43 @@ volatile DWORD g_tls_index = TLS_OUT_OF_INDEXES;
 constexpr UINT kUpdateUIMessage = WM_USER;
 constexpr UINT_PTR kDelayedSessionCommandTimerId = 1;
 
+bool NeedsRendererUpdateOnLayoutChange(TipTextService* text_service,
+                                       ITfContext* context) {
+  if (text_service == nullptr || context == nullptr) {
+    return false;
+  }
+
+  TipPrivateContext* private_context = text_service->GetPrivateContext(context);
+  if (private_context == nullptr) {
+    return false;
+  }
+
+  const commands::Output& output = private_context->last_output();
+
+  if (output.live_conversion() && output.has_preedit()) {
+    return true;
+  }
+
+  if (output.has_candidate_window() &&
+      output.candidate_window().has_category()) {
+    return true;
+  }
+
+  TipThreadContext* thread_context = text_service->GetThreadContext();
+  if (thread_context == nullptr) {
+    return false;
+  }
+
+  const TipInputModeManager* input_mode_manager =
+      thread_context->GetInputModeManager();
+  if (input_mode_manager == nullptr) {
+    return false;
+  }
+
+  return private_context->input_behavior().use_mode_indicator &&
+         input_mode_manager->IsIndicatorVisible();
+}
+
 #ifdef GOOGLE_JAPANESE_INPUT_BUILD
 
 constexpr char kHelpUrl[] = "http://www.google.com/support/ime/japanese";
@@ -771,6 +808,10 @@ class TipTextServiceImpl
   STDMETHODIMP
   OnLayoutChange(ITfContext* context, TfLayoutCode layout_code,
                  ITfContextView* context_view) override {
+    if (!NeedsRendererUpdateOnLayoutChange(this, context)) {
+      return S_OK;
+    }
+
     TipEditSession::OnLayoutChangedAsync(this, context);
     return S_OK;
   }

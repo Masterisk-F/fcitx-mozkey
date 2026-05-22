@@ -40,6 +40,7 @@
 #include "absl/strings/string_view.h"
 #include "composer/char_chunk.h"
 #include "composer/composition_input.h"
+#include "config/character_form_manager.h"
 #include "composer/table.h"
 #include "composer/transliterators.h"
 #include "testing/gunit.h"
@@ -48,14 +49,26 @@ namespace mozc {
 namespace composer {
 namespace {
 
+class CharacterFormManagerTestEnvironment : public ::testing::Environment {
+ public:
+  void SetUp() override {
+    ::mozc::config::CharacterFormManager::GetCharacterFormManager()
+        ->SetDefaultRule();
+  }
+};
+
+::testing::Environment* const kCharacterFormManagerTestEnvironment =
+    ::testing::AddGlobalTestEnvironment(
+        new CharacterFormManagerTestEnvironment);
+
 std::string GetRawString(const Composition& composition) {
   return composition.GetStringWithTransliterator(Transliterators::RAW_STRING);
 }
 
-size_t InsertCharacters(const std::string& input, size_t pos,
+size_t InsertCharacters(absl::string_view input, size_t pos,
                         Composition& composition) {
   for (size_t i = 0; i < input.size(); ++i) {
-    pos = composition.InsertAt(pos, input.substr(i, 1));
+    pos = composition.InsertAt(pos, std::string(input.substr(i, 1)));
   }
   return pos;
 }
