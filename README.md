@@ -1,11 +1,15 @@
 Mozc fork by koyasi777
 ======================
 
-このリポジトリは [google/mozc](https://github.com/google/mozc) の個人用フォークです。
+このリポジトリは [google/mozc](https://github.com/google/mozc) の非公式フォークです。
 
 本 fork は、主に自分の Windows 環境で日常的に使うために、Mozc に入力補助・ライブ変換・文脈補正・ローカル Zenz 補正・オフライン配布向けの調整を加えたものです。
 
+このプロジェクトは、v1.0.0 で **Mozkey** に改名する予定です。
+
 このビルドは google/mozc の公式配布物ではありません。
+本プロジェクトは Google 日本語入力ではありません。
+Google によるサポートや品質保証の対象ではありません。
 
 プライバシー / ネットワークアクセス
 ------------------------------------
@@ -54,11 +58,11 @@ Windows 用のビルド済み MSI は [Releases](https://github.com/koyasi777/mo
 主なブランチ
 ------------
 
-- `my-product`: 日常利用向けの main branch
+- `main`: 日常利用向けの main branch
 - `master`: upstream tracking branch
 - `pr/*`: upstream 提案向けの作業 branch
 
-主な追加機能（`my-product`）
+主な追加機能
 ---------------------------
 
 - 曖昧なローマ字規則でも途中表示できるオプションを追加
@@ -385,12 +389,12 @@ Windows MSI packages are available from [Releases](https://github.com/koyasi777/
 Main branches
 -------------
 
-- `my-product`: my main branch for daily use
+- `main`: main branch for daily use
 - `master`: upstream tracking branch
 - `pr/*`: upstream-oriented proposal branches
 
-Main features added in `my-product`
------------------------------------
+Main features added in this fork
+--------------------------------
 
 - Adds an option to display ambiguous romaji rules before the input is fully disambiguated
 - Adds a checkbox UI for that option to the romaji table editor
