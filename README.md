@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="src/data/images/product_icon_32bpp-128.png" width="112" height="112" alt="Mozkey icon">
+  <img src="src/data/images/icon.svg" width="112" height="112" alt="Mozkey icon">
 </p>
 
 <h1 align="center">Mozkey（もずきー）</h1>
