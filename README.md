@@ -1,7 +1,23 @@
-Mozkey
-======
+<p align="center">
+  <img src="src/data/images/product_icon_32bpp-128.png" width="112" height="112" alt="Mozkey icon">
+</p>
 
-Mozkey（モズキー）は [google/mozc](https://github.com/google/mozc) をベースにした非公式フォークです。
+<h1 align="center">Mozkey（もずきー）</h1>
+
+<p align="center">
+  <strong>Mozc をベースに、ライブ変換・文脈補正・ローカル Zenz 補正を加えた日本語入力 fork です。</strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/koyasi777/mozkey/releases">
+    <img alt="Releases" src="https://img.shields.io/github/v/release/koyasi777/mozkey?include_prereleases&label=release">
+  </a>
+  <img alt="Based on Mozc" src="https://img.shields.io/badge/based%20on-Mozc-88A2DD">
+  <img alt="Local first" src="https://img.shields.io/badge/local--first-Zenz-53D4C7">
+  <img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-178B8B">
+</p>
+
+Mozkey（もずきー）は [google/mozc](https://github.com/google/mozc) をベースにした非公式フォークです。
 
 本 fork は、主に自分の Windows 環境で日常的に使うために、Mozc に入力補助・ライブ変換・文脈補正・ローカル Zenz 補正・オフライン配布向けの調整を加えたものです。
 
