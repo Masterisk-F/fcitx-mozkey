@@ -5,13 +5,11 @@
 <h1 align="center">Mozkey（もずきー）</h1>
 
 <p align="center">
-  <strong>Mozc をベースに、ライブ変換・文脈補正・ローカル Zenz 補正を加えた日本語入力 fork です。</strong>
+  <strong>Mozc をベースに、遅延付きライブ変換・ローカル Zenz 補正・句読点単打確定・文脈を見た変換補正などを統合した、ローカルファーストな日本語入力 fork です。</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/koyasi777/mozkey/releases">
-    <img alt="Releases" src="https://img.shields.io/github/v/release/koyasi777/mozkey?include_prereleases&label=release">
-  </a>
+  <a href="https://github.com/koyasi777/mozkey/releases"><img alt="Releases" src="https://img.shields.io/github/v/release/koyasi777/mozkey?include_prereleases&label=release"></a>
   <img alt="Based on Mozc" src="https://img.shields.io/badge/based%20on-Mozc-88A2DD">
   <img alt="Local first" src="https://img.shields.io/badge/local--first-Zenz-53D4C7">
   <img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-178B8B">
@@ -63,7 +61,7 @@ Windows 版では、追加のオフライン防御層として、インストー
 
 Windows 用のビルド済み MSI は [Releases](https://github.com/koyasi777/mozkey/releases) からダウンロードできます。
 
-- 通常の 64-bit Windows では、Releases にある最新の `Mozc64_*_x64.msi` を使用してください。
+- 通常の 64-bit Windows では、Releases にある最新の `Mozkey_v*_x64.msi` を使用してください。
 - 本 fork のリリースは個人用の experimental build として公開しています。
 - Zenz 同梱版は、ローカル推論 runtime と GGUF model を含むため、従来の offline MSI よりファイルサイズが大きくなります。
 
@@ -393,7 +391,7 @@ Download / Install
 
 Windows MSI packages are available from [Releases](https://github.com/koyasi777/mozkey/releases).
 
-- On ordinary 64-bit Windows, use the latest `Mozc64_*_x64.msi` from Releases.
+- On ordinary 64-bit Windows, use the latest `Mozkey_v*_x64.msi` from Releases.
 - For the Zenz-bundled build, choose an MSI whose file name contains `zenz` or `zenz_offline`.
 - Releases from this fork are published as personal experimental builds.
 - Zenz-bundled builds are larger than the traditional offline MSI because they include a local inference runtime and a GGUF model.
