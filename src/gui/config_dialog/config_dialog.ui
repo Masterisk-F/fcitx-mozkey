@@ -999,7 +999,7 @@
             <bool>true</bool>
            </property>
            <property name="text">
-            <string>Use dark mode for candidate window</string>
+            <string>Use dark mode for candidate and ruby windows</string>
            </property>
           </widget>
          </item>
