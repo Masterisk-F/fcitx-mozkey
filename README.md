@@ -85,6 +85,7 @@ Windows 用のビルド済み MSI は [Releases](https://github.com/koyasi777/mo
 - Zenz 学習データを設定画面から安全に管理できる UI を追加。TSV を直接編集せず、検索、インポート、エクスポート、選択項目削除、全削除が可能
 - Zenz accepted feedback を通常変換候補の promotion に利用。1 文節の通常変換では、保存済み accepted feedback が既存候補にあれば先頭へ昇格し、候補にない場合は synthetic candidate として追加
 - 文節境界を壊さないため、複数文節に分かれた通常変換では Zenz feedback promotion を行わない
+- 複数文節に分かれるライブ変換では、全文補正の学習を保つため、accepted Zenz feedback を session-level live correction fast path として再利用
 - sensitive-like context で得られた feedback は、通常文脈の候補 promotion には使わない
 - accepted として確定した Zenz 候補は、条件を満たす場合は Mozc の user history にも外部変換結果として学習
 - Zenz prompt に使う左文脈は sanitizer を通し、URL、email、file path、token、長い数字列など sensitive-like な文脈は prompt に含めない
@@ -181,15 +182,17 @@ Zenz 補正は設定可能なデバウンス時間の後に実行されます。
 
 Zenz 出力は表示前に検証されます。空出力、短すぎる入力、Mozc 結果と同一の出力、長すぎる出力、不正な文字列、安全でない可能性のある文字列は拒否されます。拒否された場合は、通常の Mozc ライブ変換結果をそのまま表示します。
 
-Zenz ライブ補正は password field では実行されません。また、入力途中の romaji のように ASCII alphabet を含む読みも補正対象外です。
+Zenz ライブ補正は password field では実行されません。また、入力途中の raw romaji のように日本語文字シグナルを含まない読みは補正対象外です。日本語文字を含む英字混じりの入力は、privacy gate を通る場合に限り補正対象になり得ます。
 
 Zenz feedback learning は任意機能です。有効な場合でも、Zenz 補正結果が表示されただけでは保存されません。Enter や句読点・記号の単打確定などで、表示中の Zenz 結果が明示的に確定された場合だけ、accepted feedback の候補として保留されます。
 
 保留された accepted feedback は、次のユーザー操作で取り消されなかった場合だけローカル TSV に保存されます。Backspace、Escape、Revert、Undo、IME off などの修正操作が入った場合、保留 feedback は破棄されます。表示中の Zenz 補正から Space や候補移動などの通常変換操作へ移った場合、その Zenz 結果は rejected feedback として扱われます。
 
-accepted feedback は通常変換候補の promotion に再利用されます。1 文節の通常変換では、保存済み accepted feedback が既存候補にあれば先頭へ昇格し、候補にない場合は synthetic candidate として追加できます。複数文節に分かれた変換は、文節境界を converter の責務として保持するため、feedback promotion では書き換えません。
+accepted feedback の再利用方法は、単文節と複数文節で異なります。
 
-accepted feedback は session-level の live correction fast path としては再生しません。Zenz feedback は通常変換の rewriter chain 内で候補順位に反映され、その後 UserSegmentHistoryRewriter による明示的なユーザー選択履歴が最終順位を決めます。これにより、古い Zenz feedback が通常のユーザー履歴より常に後勝ちすることを避けます。
+単文節の通常変換では、Zenz feedback は rewriter chain 内の candidate promotion として再利用されます。保存済み accepted feedback が既存候補にあれば先頭へ昇格し、候補にない場合は synthetic candidate として追加できます。その後に UserSegmentHistoryRewriter が走るため、明示的なユーザー選択履歴が最終順位を決めます。
+
+複数文節に分かれるライブ変換では、converter の文節境界を feedback promotion で壊さないため、rewriter chain では通常変換候補を書き換えません。その代わり、session-level の live correction fast path として再利用します。これにより、`かれはてんてきです` → `彼は天敵です` のような全文補正の学習も再利用できます。
 
 `sensitive_like` context で得られた feedback は、通常文脈への候補 promotion には使いません。
 
@@ -460,6 +463,7 @@ Main features added in this fork
 - Adds a safe Zenz feedback management UI to the config dialog. Users can search, import, export, delete selected entries, and clear all entries without directly editing the TSV file
 - Reuses accepted Zenz feedback for normal conversion candidate promotion. In single-segment conversions, an accepted feedback candidate is promoted to the top if it already exists, or inserted as a synthetic candidate if it does not
 - Does not apply Zenz feedback promotion to multi-segment conversions, to avoid collapsing phrase boundaries
+- Reuses accepted Zenz feedback via the session-level live-correction fast path for multi-segment live conversion to preserve learned full-phrase corrections
 - Does not promote feedback obtained from `sensitive_like` context into ordinary context
 - Learns accepted Zenz candidates into Mozc user history as external conversion results when the runtime conditions allow it
 - Sanitizes left context before using it in Zenz prompts, and excludes sensitive-like context such as URLs, email addresses, file paths, tokens, and long digit sequences
@@ -533,8 +537,10 @@ identical to the Mozc result, too long, malformed, or likely to contain unsafe
 text are rejected. If validation fails, the normal Mozc live conversion result
 remains visible.
 
-Zenz live correction is disabled for password fields and for readings that still
-contain ASCII alphabet characters, such as intermediate romaji input.
+Zenz live correction is disabled for password fields and for composition text
+that has no Japanese-script signal, such as intermediate raw romaji input.
+Japanese text mixed with ASCII can still be eligible when it passes the privacy
+gate.
 
 Zenz feedback learning is optional. When enabled, a displayed Zenz result is not
 stored just because it was shown. It becomes a pending accepted feedback only
@@ -547,17 +553,21 @@ correction actions discard the pending feedback. Moving from a visible Zenz
 correction to normal conversion operations, such as Space or candidate movement,
 records the Zenz result as rejected feedback instead.
 
-Accepted feedback is reused for normal-conversion candidate promotion. During
-single-segment conversion, a learned feedback candidate can be promoted to the
-top if it already exists, or inserted as a synthetic candidate if it does not.
-Multi-segment conversions are not rewritten, because phrase boundaries are owned
-by the converter and should not be collapsed by feedback promotion.
+Accepted feedback is reused differently for single-segment and multi-segment
+conversions.
 
-Accepted feedback is not replayed as a session-level live-correction fast path.
-Zenz feedback participates in candidate ranking inside the rewriter chain, and
-UserSegmentHistoryRewriter can then make the final ranking decision based on
-explicit user selection history. This prevents stale Zenz feedback from always
-overriding newer normal user history.
+For single-segment normal conversion, Zenz feedback is reused as candidate
+promotion inside the rewriter chain. A learned feedback candidate can be
+promoted to the top if it already exists, or inserted as a synthetic candidate
+if it does not. ZenzFeedbackCandidateRewriter runs before
+UserSegmentHistoryRewriter, so explicit user selection history can still make
+the final ranking decision.
+
+For multi-segment live conversion, the rewriter-chain feedback promotion does
+not rewrite normal conversion candidates, because phrase boundaries are owned by
+the converter and should not be collapsed. Instead, accepted feedback can still be replayed via
+the session-level live-correction fast path. This preserves learned full-phrase
+corrections such as `かれはてんてきです` -> `彼は天敵です`.
 
 Feedback learned in a `sensitive_like` context is not promoted into ordinary-context conversion candidates.
 

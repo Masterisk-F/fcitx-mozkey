@@ -104,6 +104,7 @@ class SessionTestPeer : testing::TestPeer<Session> {
   PEER_VARIABLE(live_conversion_active_);
   PEER_VARIABLE(live_conversion_key_);
   PEER_VARIABLE(live_conversion_value_);
+  PEER_VARIABLE(live_conversion_preedit_output_);
   PEER_VARIABLE(zenz_live_key_);
   PEER_VARIABLE(zenz_live_value_);
   PEER_VARIABLE(zenz_live_mozc_value_);
@@ -989,7 +990,7 @@ TEST_F(SessionTest, PendingZenzFeedbackStoresContextClassOnly) {
 #if defined(_WIN32)
 
 TEST_F(SessionTest,
-       ZenzFeedbackFastPathDoesNotOverrideLiveConversionResult) {
+       ZenzFeedbackFastPathAppliesAcceptedCandidateForMultiSegmentLiveConversion) {
   MockEngine engine;
   std::shared_ptr<MockConverter> converter = CreateEngineConverterMock(&engine);
 
@@ -1011,6 +1012,71 @@ TEST_F(SessionTest,
   session_peer.live_conversion_active_() = true;
   session_peer.live_conversion_key_() = "かれはてんてきです";
   session_peer.live_conversion_value_() = "彼は点滴です";
+
+  commands::Preedit& live_preedit =
+      session_peer.live_conversion_preedit_output_();
+  live_preedit.Clear();
+
+  commands::Preedit::Segment* segment = live_preedit.add_segment();
+  segment->set_key("かれは");
+  segment->set_value("彼は");
+  segment->set_value_length(Util::CharsLen("彼は"));
+
+  segment = live_preedit.add_segment();
+  segment->set_key("てんてきです");
+  segment->set_value("点滴です");
+  segment->set_value_length(Util::CharsLen("点滴です"));
+
+  commands::Command command;
+  EXPECT_TRUE(session_peer.MaybeApplyZenzFeedbackLiveCorrection(&command));
+
+  EXPECT_TRUE(command.output().live_conversion());
+  EXPECT_FALSE(command.output().live_conversion_pending());
+  EXPECT_FALSE(command.output().zenz_live_correction_pending());
+  EXPECT_TRUE(command.output().zenz_live_correction_applied());
+  EXPECT_FALSE(command.output().has_callback());
+  EXPECT_SINGLE_SEGMENT_AND_KEY("彼は天敵です",
+                                "かれはてんてきです",
+                                command);
+
+  EXPECT_EQ(session_peer.zenz_live_key_(), "かれはてんてきです");
+  EXPECT_EQ(session_peer.zenz_live_value_(), "彼は天敵です");
+  EXPECT_EQ(session_peer.zenz_live_mozc_value_(), "彼は点滴です");
+  EXPECT_EQ(session_peer.zenz_live_context_class_(), "empty");
+}
+
+TEST_F(SessionTest,
+       ZenzFeedbackFastPathDoesNotOverrideSingleSegmentLiveConversion) {
+  MockEngine engine;
+  std::shared_ptr<MockConverter> converter = CreateEngineConverterMock(&engine);
+
+  ScopedUserProfileForZenzFeedbackSessionTest profile;
+  ASSERT_TRUE(profile.ok());
+
+  Session session(engine);
+  SessionTestPeer session_peer(session);
+  InitSessionToPrecomposition(&session);
+  EnableZenzLiveCorrectionWithFeedbackLearning(&session);
+
+  session_peer.zenz_feedback_store_().RecordAccepted(
+      "たなべ",
+      "japanese_only",
+      "田辺");
+  ASSERT_FALSE(session_peer.zenz_feedback_store_().ListEntries().empty());
+
+  session_peer.context_()->set_state(ImeContext::CONVERSION);
+  session_peer.live_conversion_active_() = true;
+  session_peer.live_conversion_key_() = "たなべ";
+  session_peer.live_conversion_value_() = "田邊";
+
+  commands::Preedit& live_preedit =
+      session_peer.live_conversion_preedit_output_();
+  live_preedit.Clear();
+
+  commands::Preedit::Segment* segment = live_preedit.add_segment();
+  segment->set_key("たなべ");
+  segment->set_value("田邊");
+  segment->set_value_length(Util::CharsLen("田邊"));
 
   commands::Command command;
   EXPECT_FALSE(session_peer.MaybeApplyZenzFeedbackLiveCorrection(&command));
@@ -1048,6 +1114,20 @@ TEST_F(SessionTest,
   session_peer.live_conversion_active_() = true;
   session_peer.live_conversion_key_() = "かれはてんてきです";
   session_peer.live_conversion_value_() = "彼は点滴です";
+
+  commands::Preedit& live_preedit =
+      session_peer.live_conversion_preedit_output_();
+  live_preedit.Clear();
+
+  commands::Preedit::Segment* segment = live_preedit.add_segment();
+  segment->set_key("かれは");
+  segment->set_value("彼は");
+  segment->set_value_length(Util::CharsLen("彼は"));
+
+  segment = live_preedit.add_segment();
+  segment->set_key("てんてきです");
+  segment->set_value("点滴です");
+  segment->set_value_length(Util::CharsLen("点滴です"));
 
   commands::Command command;
   EXPECT_FALSE(session_peer.MaybeApplyZenzFeedbackLiveCorrection(&command));
@@ -1088,6 +1168,20 @@ TEST_F(SessionTest,
   session_peer.live_conversion_active_() = true;
   session_peer.live_conversion_key_() = "かれはてんてきです";
   session_peer.live_conversion_value_() = "彼は点滴です";
+
+  commands::Preedit& live_preedit =
+      session_peer.live_conversion_preedit_output_();
+  live_preedit.Clear();
+
+  commands::Preedit::Segment* segment = live_preedit.add_segment();
+  segment->set_key("かれは");
+  segment->set_value("彼は");
+  segment->set_value_length(Util::CharsLen("彼は"));
+
+  segment = live_preedit.add_segment();
+  segment->set_key("てんてきです");
+  segment->set_value("点滴です");
+  segment->set_value_length(Util::CharsLen("点滴です"));
 
   commands::Command command;
   EXPECT_FALSE(session_peer.MaybeApplyZenzFeedbackLiveCorrection(&command));
