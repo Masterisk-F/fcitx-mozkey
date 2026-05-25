@@ -261,8 +261,8 @@
     </message>
     <message>
         <location filename="config_dialog.ui" line="817"/>
-        <source>Use dark mode for candidate window</source>
-        <translation>候補ウィンドウをダークモードにする</translation>
+        <source>Use dark mode for candidate and ruby windows</source>
+        <translation>候補・ルビ表示をダークモードにする</translation>
     </message>
     <message>
         <location filename="config_dialog.ui" line="809"/>
@@ -637,8 +637,8 @@
     </message>
     <message>
         <location filename="config_dialog.cc" line="406"/>
-        <source>Candidate window dark mode setting is enabled from new applications.</source>
-        <translation>候補ウィンドウのダークモード設定は新しいアプリケーションから有効になります。</translation>
+        <source>Candidate window and ruby overlay dark mode setting is enabled from new applications.</source>
+        <translation>候補・ルビ表示のダークモード設定は新しいアプリケーションから有効になります。</translation>
     </message>
     <message>
         <location filename="config_dialog.cc" line="732"/>
