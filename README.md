@@ -12,7 +12,8 @@
   <a href="https://github.com/koyasi777/mozkey/releases"><img alt="Releases" src="https://img.shields.io/github/v/release/koyasi777/mozkey?include_prereleases&label=release"></a>
   <img alt="Based on Mozc" src="https://img.shields.io/badge/based%20on-Mozc-88A2DD">
   <img alt="Local first" src="https://img.shields.io/badge/local--first-Zenz-53D4C7">
-  <img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-178B8B">
+  <img alt="Release build" src="https://img.shields.io/badge/release-Windows%20MSI-178B8B">
+  <img alt="macOS/Linux status" src="https://img.shields.io/badge/macOS%20%2F%20Linux-untested-lightgrey">
 </p>
 
 <br>
@@ -32,6 +33,10 @@ upstream Mozc との追従性および既存インストールとの互換性を
 
 ダウンロード / インストール
 --------------------------
+
+現時点で公開しているビルド済みパッケージと実機確認済み環境は Windows です。
+
+macOS / Linux については、upstream Mozc 自体は対応していますが、この fork で追加した機能、ビルド設定、Zenz 同梱構成、インストーラーまわりについては、まだ実機確認できていません。
 
 Windows 用のビルド済み MSI は [Releases](https://github.com/koyasi777/mozkey/releases) からダウンロードできます。
 
@@ -406,8 +411,13 @@ See also:
 - [Secure Offline Guarantee](docs/security/offline_guarantee.md)
 - [Secure Offline Release Checklist](docs/security/release_checklist.md)
 
+
 Download / Install
 ------------------
+
+At the moment, prebuilt packages and real-machine testing are available only for Windows.
+
+macOS / Linux are supported by upstream Mozc itself, but this fork's added features, build settings, Zenz-bundled configuration, and installer-related behavior have not yet been tested on real macOS / Linux environments.
 
 Windows MSI packages are available from [Releases](https://github.com/koyasi777/mozkey/releases).
 
