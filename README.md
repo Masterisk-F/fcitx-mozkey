@@ -72,6 +72,7 @@ Windows 用のビルド済み MSI は [Releases](https://github.com/koyasi777/mo
 - Windows 版の候補ウィンドウ/ルビ表示にダークモード切り替えを追加
 - Windows 版で未確定文字の文字色・背景色・下線色を設定画面からカスタマイズ可能
 - Windows 版の候補ウィンドウや IME 切り替えインジケータの配色・余白・角丸などの見た目を調整
+- Windows 版の IME 切り替えインジケータが、Windows のライト / ダークテーマに合わせて表示されるように改善
 - system dictionary 強化用の追加辞書生成パイプラインを追加
 - merge-ut-dictionaries 由来の地名・SudachiDict 系語彙を system dictionary に取り込めるようにした
 - dic-nico-intersection-pixiv 由来のネット・サブカル系固有名詞を、既存辞書との差分として daily 辞書に追加可能
@@ -287,11 +288,13 @@ Windows 版では、キー設定エディタ上で左 Shift / 右 Shift / 左 Ct
 
 これにより、IME 有効化・無効化キーを「状態を切り替えるキー」としてだけでなく、現在状態を視覚的に確認するためのキーとしても使えます。
 
-### Windows 候補ウィンドウのテーマ
+### Windows 候補ウィンドウと IME インジケータの表示テーマ
 
 Windows 版では、設定画面から候補ウィンドウの通常テーマとダークテーマを切り替えられます。
 
 ダークテーマでは配色だけでなく、余白、角丸、フッター表示なども調整し、候補ウィンドウ全体の見た目をよりモダンにしています。
+
+IME 切り替えインジケータは Windows のライト / ダークテーマに追従し、現在の入力モードを確認しやすいように配色を切り替えます。
 
 ### Windows 未確定文字の表示色
 
@@ -459,6 +462,7 @@ Main features added in this fork
 - Adds a dark-mode switch for the Windows candidate window
 - Allows customizing Windows preedit text color, background color, and underline color from the config dialog
 - Adjusts the appearance of the Windows candidate window and IME mode indicator, including colors, spacing, rounded corners, and layout
+- Makes the Windows IME mode indicator follow the Windows light/dark theme
 - Adds an enhanced system dictionary generation pipeline
 - Allows incorporating place names and SudachiDict-derived vocabulary from merge-ut-dictionaries into the system dictionary
 - Allows adding internet/subculture proper nouns from dic-nico-intersection-pixiv as daily-dictionary differences
@@ -686,11 +690,13 @@ an `IMEOff` key while IME is already off still shows the direct-input indicator.
 This makes mode-confirmation keys useful as explicit visual feedback, not only
 as state-changing toggles.
 
-### Windows candidate window theme
+### Windows candidate window and IME indicator themes
 
 On Windows, the candidate window can be switched between the default light theme and a dark theme from the config dialog.
 
 The dark theme also adjusts the candidate window appearance, including colors, spacing, rounded corners, and footer visibility, to make it look more modern.
+
+The IME mode indicator follows the Windows light/dark theme and changes its colors to keep the current input mode easy to recognize.
 
 ### Windows preedit display colors
 
