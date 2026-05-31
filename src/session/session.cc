@@ -207,6 +207,7 @@ bool IsLiveConversionTrailingDecorativeSymbol(char32_t c) {
     case 0x301C:  // 〜
     case 0x30FC:  // ー
     case 0x2015:  // ―
+    case 0x2025:  // ‥
     case 0x2026:  // …
     case 0x0021:  // !
     case 0xFF01:  // ！
@@ -4534,10 +4535,19 @@ bool Session::InsertCharacter(commands::Command* command) {
       return CommitPendingLiveConversionDisplayDirectly(command);
     }
 
-    // Defensive fallback. The pre-insert predicate accepted the key as a direct
-    // commit trigger, so this path should normally not be reached. Avoid inserting
-    // the same key twice.
+    // The physical key looked like a direct-commit trigger before insertion,
+    // but the romaji table may have turned it into a different character.
+    // Example: "v." -> "…" or "v," -> "‥".
+    //
+    // In that case, do not fall back to raw composition, because it discards
+    // the stable converted prefix shown by live conversion, e.g. "今日は".
+    // Treat it as ordinary continued composition and schedule live conversion
+    // for the updated preedit.
     CancelPendingLiveConversion();
+    if (MaybeScheduleLiveConversion(command)) {
+      return true;
+    }
+
     OutputComposition(command);
     return true;
   }
