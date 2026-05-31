@@ -207,6 +207,7 @@ bool IsLiveConversionTrailingDecorativeSymbol(char32_t c) {
     case 0x301C:  // 〜
     case 0x30FC:  // ー
     case 0x2015:  // ―
+    case 0x2025:  // ‥
     case 0x2026:  // …
     case 0x0021:  // !
     case 0xFF01:  // ！
@@ -935,6 +936,67 @@ bool IsPendingDirectCommitLearningDiscardKey(
     default:
       return false;
   }
+}
+
+bool ShouldCommitLiveConversionBeforeShiftAsciiInput(
+    const config::Config& config,
+    const composer::Composer& composer,
+    const commands::KeyEvent& key_event) {
+  if (config.shift_key_mode_switch() !=
+      config::Config::ASCII_INPUT_MODE) {
+    return false;
+  }
+
+  if (key_event.input_style() != commands::KeyEvent::FOLLOW_MODE) {
+    return false;
+  }
+
+  if (key_event.has_special_key()) {
+    return false;
+  }
+
+  if (composer.GetInputFieldType() == commands::Context::PASSWORD) {
+    return false;
+  }
+
+  const transliteration::TransliterationType input_mode =
+      composer.GetInputMode();
+  if (input_mode == transliteration::HALF_ASCII ||
+      input_mode == transliteration::FULL_ASCII) {
+    return false;
+  }
+
+  const size_t length = composer.GetLength();
+  if (length == 0 || length != composer.GetCursor()) {
+    return false;
+  }
+
+  std::string input;
+  if (!key_event.key_string().empty()) {
+    if (key_event.key_string().size() != 1) {
+      return false;
+    }
+    input = key_event.key_string();
+  } else if (key_event.has_key_code()) {
+    if (key_event.key_code() > 0x7f) {
+      return false;
+    }
+    input.push_back(static_cast<char>(key_event.key_code()));
+  } else {
+    return false;
+  }
+
+  const uint32_t modifiers = KeyEventUtil::GetModifiers(key_event);
+  if (KeyEventUtil::HasCtrl(modifiers) ||
+      KeyEventUtil::HasAlt(modifiers)) {
+    return false;
+  }
+
+  const bool caps_locked = KeyEventUtil::HasCaps(modifiers);
+  const char key = input[0];
+
+  return (!caps_locked && ('A' <= key && key <= 'Z')) ||
+         (caps_locked && ('a' <= key && key <= 'z'));
 }
 
 void ExtractPreeditKeyAndValue(const commands::Preedit& preedit,
@@ -4473,10 +4535,19 @@ bool Session::InsertCharacter(commands::Command* command) {
       return CommitPendingLiveConversionDisplayDirectly(command);
     }
 
-    // Defensive fallback. The pre-insert predicate accepted the key as a direct
-    // commit trigger, so this path should normally not be reached. Avoid inserting
-    // the same key twice.
+    // The physical key looked like a direct-commit trigger before insertion,
+    // but the romaji table may have turned it into a different character.
+    // Example: "v." -> "…" or "v," -> "‥".
+    //
+    // In that case, do not fall back to raw composition, because it discards
+    // the stable converted prefix shown by live conversion, e.g. "今日は".
+    // Treat it as ordinary continued composition and schedule live conversion
+    // for the updated preedit.
     CancelPendingLiveConversion();
+    if (MaybeScheduleLiveConversion(command)) {
+      return true;
+    }
+
     OutputComposition(command);
     return true;
   }
@@ -4497,6 +4568,34 @@ bool Session::InsertCharacter(commands::Command* command) {
   const std::string zenz_value_before_edit = zenz_live_value_;
   const std::string zenz_context_class_before_edit =
       zenz_live_context_class_.empty() ? "empty" : zenz_live_context_class_;
+
+  if ((live_conversion_active_ || live_conversion_pending_) &&
+      ShouldCommitLiveConversionBeforeShiftAsciiInput(
+          context_->GetConfig(), context_->composer(), key)) {
+    if (had_visible_zenz_correction) {
+      CommitZenzLiveCorrectionResult(command);
+    } else if (live_conversion_active_) {
+      const std::string live_key =
+          live_conversion_key_.empty()
+              ? context_->composer().GetQueryForConversion()
+              : live_conversion_key_;
+      const std::string live_value =
+          live_conversion_value_.empty()
+              ? context_->composer().GetStringForSubmission()
+              : live_conversion_value_;
+
+      ClearLiveConversionState();
+      CommitStringDirectly(live_key, live_value, command);
+    } else if (live_conversion_pending_) {
+      CommitPendingLiveConversionDisplayDirectly(command);
+    }
+
+    context_->mutable_composer()->InsertCharacterKeyEvent(key);
+    ClearUndoContext();
+    SetSessionState(ImeContext::COMPOSITION, context_.get());
+    OutputComposition(command);
+    return true;
+  }
 
   // If the current conversion was started by live conversion, ordinary
   // character input should continue editing the composition.  So cancel

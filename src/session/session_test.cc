@@ -102,7 +102,9 @@ class SessionTestPeer : testing::TestPeer<Session> {
   PEER_VARIABLE(context_);
   PEER_VARIABLE(undo_contexts_);
   PEER_VARIABLE(live_conversion_active_);
+  PEER_VARIABLE(live_conversion_pending_);
   PEER_VARIABLE(live_conversion_key_);
+  PEER_VARIABLE(live_conversion_preedit_);
   PEER_VARIABLE(live_conversion_value_);
   PEER_VARIABLE(live_conversion_preedit_output_);
   PEER_VARIABLE(zenz_live_key_);
@@ -1282,6 +1284,141 @@ TEST_F(SessionTest,
 }
 
 #endif  // defined(_WIN32)
+
+TEST_F(SessionTest,
+       PendingLiveConversionKeepsConvertedPrefixForRomajiEllipsis) {
+  MockEngine engine;
+  std::shared_ptr<MockConverter> converter = CreateEngineConverterMock(&engine);
+
+  Session session(engine);
+  SessionTestPeer session_peer(session);
+  InitSessionToPrecomposition(&session);
+
+  config::Config config;
+  config::ConfigHandler::GetDefaultConfig(&config);
+  config.set_use_live_conversion(true);
+  config.set_use_direct_commit(true);
+  config.set_direct_commit_key(config::Config::DIRECT_COMMIT_KUTEN);
+  session.SetConfig(config);
+
+  auto table = std::make_shared<composer::Table>();
+  table->InitializeWithRequestAndConfig(
+      commands::Request::default_instance(),
+      config::ConfigHandler::DefaultConfig());
+  table->AddRule("v.", "…", "");
+  session.SetTable(table);
+
+  commands::Command command;
+  InsertCharacterChars("kyouhav", &session, &command);
+  ASSERT_EQ(session.context().composer().GetQueryForConversion(), "きょうはv");
+
+  session_peer.context_()->set_state(ImeContext::COMPOSITION);
+  session_peer.live_conversion_pending_() = true;
+  session_peer.live_conversion_key_() = "きょうは";
+  session_peer.live_conversion_preedit_() = "きょうは";
+  session_peer.live_conversion_value_() = "今日は";
+
+  commands::Preedit& live_preedit =
+      session_peer.live_conversion_preedit_output_();
+  live_preedit.Clear();
+
+  commands::Preedit::Segment* segment = live_preedit.add_segment();
+  segment->set_key("きょうは");
+  segment->set_value("今日は");
+  segment->set_value_length(Util::CharsLen("今日は"));
+
+  command.Clear();
+  ASSERT_TRUE(SendKey(".", &session, &command));
+
+  EXPECT_TRUE(command.output().live_conversion());
+  EXPECT_TRUE(command.output().live_conversion_pending());
+  EXPECT_PREEDIT("今日は…", command);
+  EXPECT_EQ(session.context().state(), ImeContext::COMPOSITION);
+}
+
+TEST_F(SessionTest,
+       PendingLiveConversionKeepsConvertedPrefixForRomajiTwoDotLeader) {
+  MockEngine engine;
+  std::shared_ptr<MockConverter> converter = CreateEngineConverterMock(&engine);
+
+  Session session(engine);
+  SessionTestPeer session_peer(session);
+  InitSessionToPrecomposition(&session);
+
+  config::Config config;
+  config::ConfigHandler::GetDefaultConfig(&config);
+  config.set_use_live_conversion(true);
+  config.set_use_direct_commit(true);
+  config.set_direct_commit_key(config::Config::DIRECT_COMMIT_TOUTEN);
+  session.SetConfig(config);
+
+  auto table = std::make_shared<composer::Table>();
+  table->InitializeWithRequestAndConfig(
+      commands::Request::default_instance(),
+      config::ConfigHandler::DefaultConfig());
+  table->AddRule("v,", "‥", "");
+  session.SetTable(table);
+
+  commands::Command command;
+  InsertCharacterChars("kyouhav", &session, &command);
+  ASSERT_EQ(session.context().composer().GetQueryForConversion(), "きょうはv");
+
+  session_peer.context_()->set_state(ImeContext::COMPOSITION);
+  session_peer.live_conversion_pending_() = true;
+  session_peer.live_conversion_key_() = "きょうは";
+  session_peer.live_conversion_preedit_() = "きょうは";
+  session_peer.live_conversion_value_() = "今日は";
+
+  commands::Preedit& live_preedit =
+      session_peer.live_conversion_preedit_output_();
+  live_preedit.Clear();
+
+  commands::Preedit::Segment* segment = live_preedit.add_segment();
+  segment->set_key("きょうは");
+  segment->set_value("今日は");
+  segment->set_value_length(Util::CharsLen("今日は"));
+
+  command.Clear();
+  ASSERT_TRUE(SendKey(",", &session, &command));
+
+  EXPECT_TRUE(command.output().live_conversion());
+  EXPECT_TRUE(command.output().live_conversion_pending());
+  EXPECT_PREEDIT("今日は‥", command);
+  EXPECT_EQ(session.context().state(), ImeContext::COMPOSITION);
+}
+
+TEST_F(SessionTest,
+       LiveConversionShiftAsciiCommitsVisibleResultBeforeAsciiInput) {
+  MockEngine engine;
+  std::shared_ptr<MockConverter> converter = CreateEngineConverterMock(&engine);
+
+  Session session(engine);
+  SessionTestPeer session_peer(session);
+  InitSessionToPrecomposition(&session);
+
+  config::Config config;
+  config::ConfigHandler::GetDefaultConfig(&config);
+  config.set_use_live_conversion(true);
+  config.set_shift_key_mode_switch(config::Config::ASCII_INPUT_MODE);
+  session.SetConfig(config);
+
+  commands::Command command;
+  InsertCharacterChars("kyou", &session, &command);
+  ASSERT_EQ(session.context().composer().GetQueryForConversion(), "きょう");
+
+  session_peer.context_()->set_state(ImeContext::CONVERSION);
+  session_peer.live_conversion_active_() = true;
+  session_peer.live_conversion_key_() = "きょう";
+  session_peer.live_conversion_value_() = "今日";
+
+  command.Clear();
+  ASSERT_TRUE(SendKey("A", &session, &command));
+
+  EXPECT_RESULT("今日", command);
+  EXPECT_PREEDIT("A", command);
+  EXPECT_EQ(command.output().mode(), commands::HALF_ASCII);
+  EXPECT_EQ(session.context().state(), ImeContext::COMPOSITION);
+}
 
 TEST_F(SessionTest, PendingDirectCommitLearningIsConfirmedByNextTextInput) {
   MockEngine engine;
