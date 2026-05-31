@@ -1283,6 +1283,39 @@ TEST_F(SessionTest,
 
 #endif  // defined(_WIN32)
 
+TEST_F(SessionTest,
+       LiveConversionShiftAsciiCommitsVisibleResultBeforeAsciiInput) {
+  MockEngine engine;
+  std::shared_ptr<MockConverter> converter = CreateEngineConverterMock(&engine);
+
+  Session session(engine);
+  SessionTestPeer session_peer(session);
+  InitSessionToPrecomposition(&session);
+
+  config::Config config;
+  config::ConfigHandler::GetDefaultConfig(&config);
+  config.set_use_live_conversion(true);
+  config.set_shift_key_mode_switch(config::Config::ASCII_INPUT_MODE);
+  session.SetConfig(config);
+
+  commands::Command command;
+  InsertCharacterChars("kyou", &session, &command);
+  ASSERT_EQ(session.context().composer().GetQueryForConversion(), "きょう");
+
+  session_peer.context_()->set_state(ImeContext::CONVERSION);
+  session_peer.live_conversion_active_() = true;
+  session_peer.live_conversion_key_() = "きょう";
+  session_peer.live_conversion_value_() = "今日";
+
+  command.Clear();
+  ASSERT_TRUE(SendKey("A", &session, &command));
+
+  EXPECT_RESULT("今日", command);
+  EXPECT_PREEDIT("A", command);
+  EXPECT_EQ(command.output().mode(), commands::HALF_ASCII);
+  EXPECT_EQ(session.context().state(), ImeContext::COMPOSITION);
+}
+
 TEST_F(SessionTest, PendingDirectCommitLearningIsConfirmedByNextTextInput) {
   MockEngine engine;
   std::shared_ptr<MockConverter> converter = CreateEngineConverterMock(&engine);
