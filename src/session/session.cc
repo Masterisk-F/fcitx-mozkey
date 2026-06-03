@@ -899,8 +899,9 @@ const RepeatedSokuonStemPattern kEvaluativeSlangPatterns[] = {
     {"お", "そ", EvaluativeSlangTailType::kOptionalI},
     {"は", "や", EvaluativeSlangTailType::kOptionalI},
 
-    // めっちゃ
+    // めっちゃ / もっと
     {"め", "ちゃ", EvaluativeSlangTailType::kNone},
+    {"も", "と", EvaluativeSlangTailType::kNone},
 
     // 眠い / 細い / 狭い / 短い / 白い
     {"ね", "む", EvaluativeSlangTailType::kOptionalI},

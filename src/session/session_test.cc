@@ -1557,6 +1557,12 @@ TEST_F(SessionTest, LiveConversionKeepsExpressiveKanaAtomsAsComposition) {
       "めっちゃ",
       "めっっちゃ",
 
+      "もっと",
+      "もっっと",
+      "もっっっと",
+      "もっとー",
+      "もっっとー",
+
       "ねっむ",
       "ねっっむい",
 
@@ -1681,6 +1687,8 @@ TEST_F(SessionTest, LiveConversionKeepsExpressiveKanaPrefixesAsComposition) {
       "はっっ",
       "めっ",
       "めっっ",
+      "もっ",
+      "もっっ",
       "ねっ",
       "ねっっ",
       "ほっ",
@@ -1897,6 +1905,8 @@ TEST_F(SessionTest, LiveConversionDoesNotHoldNonExpressiveSokuonWords) {
       "めちゃくちゃ",
       "ちょっと",
       "ちょうど",
+      "もっとく",
+      "もっとも",
   };
 
   for (absl::string_view key : kKeys) {
