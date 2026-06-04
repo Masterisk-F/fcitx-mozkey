@@ -45,8 +45,11 @@ FUNCTION_PHRASE_GUARDS = (
     ("では", "では", "で", "は"),
     ("とは", "とは", "と", "は"),
     ("にも", "にも", "に", "も"),
+    ("にまで", "にまで", "に", "まで"),
     ("でも", "でも", "で", "も"),
     ("よりも", "よりも", "より", "も"),
+    ("までに", "までに", "まで", "に"),
+    ("までも", "までも", "まで", "も"),
     ("について", "について", "に", "て"),
     ("として", "として", "と", "て"),
 )
@@ -82,6 +85,19 @@ SEEDED_FIXED_GUARDS = (
     # Fix:
     # もとにもどして -> 下に戻して
     ("もとにもどして", "元に戻して", "に", "もどして"),
+
+    # Fix:
+    # とうちたいのに -> 統治体の二
+    ("とうちたいのに", "と打ちたいのに", "と", "のに"),
+)
+
+DIRECT_IDIOM_GUARDS = (
+    # Idiom rescue:
+    # 肌身離さず is a fixed idiomatic expression.  This is not a broad
+    # syntax-boundary guard; keep it explicit so generation remains
+    # reproducible without depending on whether component entries exist.
+    ("はだみはなさ", 1851, 1851, 3600, "肌身離さ"),
+    ("はだみはなさず", 1851, 1851, 3600, "肌身離さず"),
 )
 
 DANGEROUS_READING_SUFFIXES = (
@@ -418,6 +434,26 @@ def make_seeded_fixed_guard(
     )
 
 
+def make_direct_idiom_guard(
+    key: str,
+    lid: int,
+    rid: int,
+    cost: int,
+    value: str,
+) -> GuardEntry:
+    return GuardEntry(
+        key=key,
+        lid=lid,
+        rid=rid,
+        cost=cost,
+        value=value,
+        reason="direct_idiom_guard",
+        source_key=key,
+        source_value=value,
+        collision_value="",
+    )
+
+
 def generate_guards(
     entries: list[Entry],
     max_source_cost: int,
@@ -573,6 +609,22 @@ def generate_guards(
         seen.add(signature)
         guards.append(guard)
         stats["seeded_fixed_guards"] += 1
+
+    for key, lid, rid, cost, value in DIRECT_IDIOM_GUARDS:
+        guard = make_direct_idiom_guard(
+            key=key,
+            lid=lid,
+            rid=rid,
+            cost=cost,
+            value=value,
+        )
+        signature = (guard.key, guard.lid, guard.rid, guard.value)
+        if signature in seen:
+            stats["duplicate_guard"] += 1
+            continue
+        seen.add(signature)
+        guards.append(guard)
+        stats["direct_idiom_guards"] += 1
 
     guards.sort(key=lambda e: (e.key, e.value, e.lid, e.rid, e.cost))
 

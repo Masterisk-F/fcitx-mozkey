@@ -43,6 +43,9 @@ Windows 用のビルド済み MSI は [Releases](https://github.com/koyasi777/mo
 - 通常の 64-bit Windows では、Releases にある最新の `Mozkey_v*_x64.msi` を使用してください。
 - 本 fork のリリースは個人用の experimental build として公開しています。
 - Zenz 同梱版は、ローカル推論 runtime と GGUF model を含むため、従来の offline MSI よりファイルサイズが大きくなります。
+- Windows 向けリリース MSI には、ローカル生成した `daily` system dictionary profile を同梱する場合があります。
+- `daily` profile には、Mozc 標準辞書に加えて、merge-ut-dictionaries、dic-nico-intersection-pixiv、mozcdic-ut-personal-names、Mozkey syntax guard dictionary 由来の生成辞書が含まれます。
+- 外部辞書・同梱 runtime・model の出典とライセンス note については [Third-party notices](THIRD_PARTY_NOTICES.md) を参照してください。
 
 > [!WARNING]
 > このビルドは google/mozc の公式配布物ではありません。
@@ -82,7 +85,8 @@ Windows 用のビルド済み MSI は [Releases](https://github.com/koyasi777/mo
 - system dictionary 強化用の追加辞書生成パイプラインを追加
 - merge-ut-dictionaries 由来の地名・SudachiDict 系語彙を system dictionary に取り込めるようにした
 - dic-nico-intersection-pixiv 由来のネット・サブカル系固有名詞を、既存辞書との差分として daily 辞書に追加可能
-- 文節区切り崩れを抑えるための syntax guard 辞書を daily 辞書生成パイプラインに追加
+- mozcdic-ut-personal-names 由来の人名辞書を、既存辞書や nico/pixiv delta との重複を除いた弱い daily 辞書として追加可能
+- 文節区切り崩れを抑えるための syntax guard 辞書を daily 辞書生成パイプラインに追加し、`と打ちたいのに`、`に分ける`、`にまで`、`までに`、`までも`、`肌身離さず` などの高影響な経路を保護
 - 大規模な生成辞書は Git に含めず、ローカルで再生成して Bazel の辞書入力へ切り替える運用に
 - `には` や `してたの` のような自然な機能語かな列が、`二は` や `して他の` のような 1 文字漢字候補に過剰変換される挙動を抑制
 - `にじ` のような 2 文字ひらがな入力で、`に|じ` のような短すぎる文節分割が全体候補を隠す挙動を抑制
@@ -371,11 +375,18 @@ daily local 辞書は主に以下を元に生成できます。
 - dic-nico-intersection-pixiv
   - 固有名詞、ネットスラング、作品名、キャラクター名、サブカル系語彙
   - 生成済み daily 辞書または Mozc 標準辞書に既に存在する key/value は除外
-- Koyasi syntax guard 辞書
+  - 末尾に `☆`、`★`、`♡`、`♪`、`※` などの装飾記号が付く表記は daily 変換ではノイズになりやすいため除外
+- mozcdic-ut-personal-names
+  - 人名・芸名・活動名などを含む人名辞書
+  - 生成済み daily 辞書、nico/pixiv delta、Mozc 標準辞書に既に存在する key/value は除外
+  - 短すぎる読み、長いカタカナ塊、グループ名風表記、ASCII 表記、記号を含む表記などは除外または弱める
+- Mozkey syntax guard 辞書
   - 文節区切り崩れの影響が大きいケースだけを小さな生成辞書として補強
-  - 例: `と打ちたいのに` や `に分ける` のような文法的に自然な経路を保護
+  - 例: `と打ちたいのに`、`に分ける`、`にまで`、`までに`、`までも`、`肌身離さず` のような経路を保護
 
 巨大な生成辞書ファイルは、このリポジトリには commit しません。`src/data/dictionary_koyasi/generated/` 以下にローカル生成します。
+
+リリース MSI には、ローカル生成した `daily` system dictionary profile を同梱する場合があります。外部辞書の出典とライセンス note は [Third-party notices](THIRD_PARTY_NOTICES.md) および [Koyasi Dictionary Data](src/data/dictionary_koyasi/README.md) を参照してください。
 
 強化辞書を有効にした状態で package build する前に、daily 辞書をローカルで再生成してください。
 
@@ -385,7 +396,8 @@ daily local 辞書は主に以下を元に生成できます。
 
 詳細:
 
-- [Koyasi Dictionary Data](src/data/dictionary_koyasi/README.md)
+* [Koyasi Dictionary Data](src/data/dictionary_koyasi/README.md)
+* [Third-party notices](THIRD_PARTY_NOTICES.md)
 
 Note
 ----
@@ -476,6 +488,9 @@ Windows MSI packages are available from [Releases](https://github.com/koyasi777/
 - For the Zenz-bundled build, choose an MSI whose file name contains `zenz` or `zenz_offline`.
 - Releases from this fork are published as personal experimental builds.
 - Zenz-bundled builds are larger than the traditional offline MSI because they include a local inference runtime and a GGUF model.
+- Windows release MSI packages may include the locally generated `daily` system dictionary profile.
+- The `daily` profile is generated from the Mozc base dictionaries, merge-ut-dictionaries, dic-nico-intersection-pixiv, mozcdic-ut-personal-names, and the Mozkey syntax guard dictionary.
+- See [Third-party notices](THIRD_PARTY_NOTICES.md) for source and license notes for bundled runtimes, model files, and generated dictionary data.
 
 > [!WARNING]
 > This build is not an official google/mozc distribution.
@@ -520,7 +535,8 @@ Main features added in this fork
 - Adds an enhanced system dictionary generation pipeline
 - Allows incorporating place names and SudachiDict-derived vocabulary from merge-ut-dictionaries into the system dictionary
 - Allows adding internet/subculture proper nouns from dic-nico-intersection-pixiv as daily-dictionary differences
-- Adds a syntax guard dictionary generation pipeline to reduce high-impact segmentation failures
+- Allows adding a weak personal-name dictionary from mozcdic-ut-personal-names after removing entries already covered by the generated daily dictionary, nico/pixiv delta dictionary, or base Mozc dictionaries
+- Adds a syntax guard dictionary generation pipeline to reduce high-impact segmentation failures, including guarded paths such as `と打ちたいのに`, `に分ける`, `にまで`, `までに`, `までも`, and `肌身離さず`
 - Keeps large generated dictionary files out of Git and switches Bazel dictionary inputs to locally generated files
 - Reduces over-conversion of natural functional kana sequences such as `には` and `してたの`
 - Reduces cases where short two-character hiragana inputs such as `にじ` are split too aggressively
@@ -814,12 +830,19 @@ The daily local dictionary can be generated from:
 - dic-nico-intersection-pixiv
   - additional proper nouns, internet slang, works, characters, and subculture terms
   - entries already covered by the generated daily dictionary or the base Mozc dictionaries are skipped
-- Koyasi syntax guard dictionary
+  - values ending with decorative symbols such as `☆`, `★`, `♡`, `♪`, or `※` are rejected because they tend to be noisy in daily conversion
+- mozcdic-ut-personal-names
+  - personal names, stage names, and activity names
+  - entries already covered by the generated daily dictionary, nico/pixiv delta dictionary, or base Mozc dictionaries are skipped
+  - risky short readings, long katakana-like names, group-like names, ASCII values, and punctuation-heavy values are filtered or demoted
+- Mozkey syntax guard dictionary
   - small generated guard entries for high-impact segmentation failures
-  - for example, protecting grammar-like paths such as `と打ちたいのに` and `に分ける`
+  - for example, protecting paths such as `と打ちたいのに`, `に分ける`, `にまで`, `までに`, `までも`, and `肌身離さず`
 
 Large generated dictionary files are not committed to this repository.
 They are generated locally under `src/data/dictionary_koyasi/generated/`.
+
+Windows release MSI packages may include the locally generated `daily` system dictionary profile. See [Third-party notices](THIRD_PARTY_NOTICES.md) and [Koyasi Dictionary Data](src/data/dictionary_koyasi/README.md) for source and license notes.
 
 Before building a package with the enhanced dictionary enabled, regenerate the daily dictionary locally:
 
@@ -829,7 +852,8 @@ Before building a package with the enhanced dictionary enabled, regenerate the d
 
 See:
 
-- [Koyasi Dictionary Data](src/data/dictionary_koyasi/README.md)
+* [Koyasi Dictionary Data](src/data/dictionary_koyasi/README.md)
+* [Third-party notices](THIRD_PARTY_NOTICES.md)
 
 Note
 ----
