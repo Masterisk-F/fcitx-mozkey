@@ -30,8 +30,6 @@ constexpr BYTE kWindowAlpha = 228;
 // Keep the overlay close to the preedit, but do not let it cover the glyphs.
 constexpr int kFallbackLineHeight = 22;
 
-constexpr size_t kCandidateTextStyleIndex = 2;
-
 struct RubyWindowTheme {
   COLORREF background_color;
   COLORREF border_color;
@@ -62,17 +60,14 @@ RubyWindowTheme GetRubyWindowTheme() {
     theme.border_color = ToColorRef(style.border_color());
   }
 
-  if (style.text_styles_size() > kCandidateTextStyleIndex) {
-    const RendererStyle::TextStyle& candidate_style =
-        style.text_styles(kCandidateTextStyleIndex);
+  const RendererStyle::TextStyle& candidate_style = style.candidate_style();
 
-    if (candidate_style.has_background_color()) {
-      theme.background_color = ToColorRef(candidate_style.background_color());
-    }
+  if (candidate_style.has_background_color()) {
+    theme.background_color = ToColorRef(candidate_style.background_color());
+  }
 
-    if (candidate_style.has_foreground_color()) {
-      theme.text_color = ToColorRef(candidate_style.foreground_color());
-    }
+  if (candidate_style.has_foreground_color()) {
+    theme.text_color = ToColorRef(candidate_style.foreground_color());
   }
 
   return theme;
@@ -85,13 +80,11 @@ bool IsLiveConversionRubyWindowEnabled() {
 
 std::wstring GetRubyWindowFontFaceName() {
   RendererStyle style;
-  if (!RendererStyleHandler::GetRendererStyle(&style) ||
-      style.text_styles_size() <= kCandidateTextStyleIndex) {
+  if (!RendererStyleHandler::GetRendererStyle(&style)) {
     return L"Yu Gothic UI";
   }
 
-  const RendererStyle::TextStyle& candidate_style =
-      style.text_styles(kCandidateTextStyleIndex);
+  const RendererStyle::TextStyle& candidate_style = style.candidate_style();
   if (!candidate_style.has_font_name() || candidate_style.font_name().empty()) {
     return L"Yu Gothic UI";
   }

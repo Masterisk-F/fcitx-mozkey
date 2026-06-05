@@ -39,6 +39,8 @@ TEST(RendererStyleHandlerTest, GetRendererStyle) {
   RendererStyle style;
   RendererStyleHandler::GetRendererStyle(&style);
   EXPECT_TRUE(style.has_window_border());
+  EXPECT_TRUE(style.has_infolist_style());
+  EXPECT_TRUE(style.infolist_style().has_focused_border_color());
 }
 
 TEST(RendererStyleHandlerTest, ApplyCandidateRubyFont) {
@@ -47,10 +49,9 @@ TEST(RendererStyleHandlerTest, ApplyCandidateRubyFont) {
 
   RendererStyleHandler::ApplyCandidateRubyFont("Yu Gothic UI", &style);
 
-  ASSERT_GT(style.text_styles_size(), 3);
-  EXPECT_FALSE(style.text_styles(0).has_font_name());
-  EXPECT_EQ("Yu Gothic UI", style.text_styles(2).font_name());
-  EXPECT_EQ("Yu Gothic UI", style.text_styles(3).font_name());
+  EXPECT_FALSE(style.shortcut_style().has_font_name());
+  EXPECT_EQ("Yu Gothic UI", style.candidate_style().font_name());
+  EXPECT_EQ("Yu Gothic UI", style.description_style().font_name());
   EXPECT_FALSE(style.footer_style().has_font_name());
   EXPECT_FALSE(style.footer_sub_label_style().has_font_name());
   EXPECT_EQ("Yu Gothic UI",
@@ -66,8 +67,7 @@ TEST(RendererStyleHandlerTest, ApplyCandidateRubyFontSkipsEmptyFontName) {
 
   RendererStyleHandler::ApplyCandidateRubyFont("", &style);
 
-  ASSERT_GT(style.text_styles_size(), 3);
-  EXPECT_FALSE(style.text_styles(2).has_font_name());
+  EXPECT_FALSE(style.candidate_style().has_font_name());
   EXPECT_FALSE(style.footer_style().has_font_name());
   EXPECT_FALSE(style.infolist_style().title_style().has_font_name());
 }

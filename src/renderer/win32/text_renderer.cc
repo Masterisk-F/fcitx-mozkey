@@ -83,23 +83,20 @@ namespace {
 
     switch (type) {
       case TextRenderer::FONTSET_SHORTCUT:
-        if (style.text_styles_size() > kShortcutTextStyleIndex) {
-          return ToColorRef(
-              style.text_styles(kShortcutTextStyleIndex).foreground_color());
+        if (style.shortcut_style().has_foreground_color()) {
+          return ToColorRef(style.shortcut_style().foreground_color());
         }
         return RGB(0x61, 0x61, 0x61);
 
       case TextRenderer::FONTSET_CANDIDATE:
-        if (style.text_styles_size() > kCandidateTextStyleIndex) {
-          return ToColorRef(
-              style.text_styles(kCandidateTextStyleIndex).foreground_color());
+        if (style.candidate_style().has_foreground_color()) {
+          return ToColorRef(style.candidate_style().foreground_color());
         }
         return RGB(0x00, 0x00, 0x00);
 
       case TextRenderer::FONTSET_DESCRIPTION:
-        if (style.text_styles_size() > kDescriptionTextStyleIndex) {
-          return ToColorRef(
-              style.text_styles(kDescriptionTextStyleIndex).foreground_color());
+        if (style.description_style().has_foreground_color()) {
+          return ToColorRef(style.description_style().foreground_color());
         }
         return RGB(0x88, 0x88, 0x88);
 
@@ -129,10 +126,16 @@ namespace {
 
   const RendererStyle::TextStyle* GetTextStyleOrNull(
       const RendererStyle& style, size_t index) {
-    if (index >= static_cast<size_t>(style.text_styles_size())) {
-      return nullptr;
+    switch (index) {
+      case kShortcutTextStyleIndex:
+        return &style.shortcut_style();
+      case kCandidateTextStyleIndex:
+        return &style.candidate_style();
+      case kDescriptionTextStyleIndex:
+        return &style.description_style();
+      default:
+        return nullptr;
     }
-    return &style.text_styles(static_cast<int>(index));
   }
 
   bool IsSafeLogFontFaceName(const std::wstring& font_name) {
