@@ -65,6 +65,15 @@ SEEDED_PREFIX_GUARDS = (
 
     # Secondary useful variant.
     ("にわける", "に別ける", "に", "わける"),
+
+    # Fix:
+    #   になったりします -> 担ったりします
+    # Keep the grammar boundary between the particle に and なったり...
+    ("になったり", "になったり", "に", "なったり"),
+    ("になったりする", "になったりする", "に", "なったりする"),
+    ("になったりします", "になったりします", "に", "なったりします"),
+    ("になったりして", "になったりして", "に", "なったりして"),
+    ("になったりした", "になったりした", "に", "なったりした"),
 )
 
 SEEDED_FIXED_GUARDS = (
@@ -91,13 +100,25 @@ SEEDED_FIXED_GUARDS = (
     ("とうちたいのに", "と打ちたいのに", "と", "のに"),
 )
 
-DIRECT_IDIOM_GUARDS = (
+DIRECT_FIXED_GUARDS = (
     # Idiom rescue:
     # 肌身離さず is a fixed idiomatic expression.  This is not a broad
     # syntax-boundary guard; keep it explicit so generation remains
     # reproducible without depending on whether component entries exist.
-    ("はだみはなさ", 1851, 1851, 3600, "肌身離さ"),
-    ("はだみはなさず", 1851, 1851, 3600, "肌身離さず"),
+    ("はだみはなさ", 1851, 1851, 3600, "肌身離さ", "direct_idiom_guard"),
+    ("はだみはなさず", 1851, 1851, 3600, "肌身離さず", "direct_idiom_guard"),
+
+    # Mimetic rescue:
+    # ぐちょぐちょ and ぐちょっと are natural hiragana mimetic expressions,
+    # but the base dictionary does not contain them, so conversion can fall
+    # back to unnatural segmentation such as 愚著具著 or 具ちょっと.
+    #
+    # Use ids/costs close to existing hiragana mimetic entries such as
+    # つるつる and どろどろ.
+    ("ぐちょぐちょ", 12, 12, 4300, "ぐちょぐちょ", "direct_mimetic_guard"),
+    ("ぐちょぐちょ", 1841, 1841, 6200, "ぐちょぐちょ", "direct_mimetic_guard"),
+    ("ぐちょっと", 12, 12, 4300, "ぐちょっと", "direct_mimetic_guard"),
+    ("ぐちょっと", 1841, 1841, 6200, "ぐちょっと", "direct_mimetic_guard"),
 )
 
 DANGEROUS_READING_SUFFIXES = (
@@ -434,12 +455,13 @@ def make_seeded_fixed_guard(
     )
 
 
-def make_direct_idiom_guard(
+def make_direct_fixed_guard(
     key: str,
     lid: int,
     rid: int,
     cost: int,
     value: str,
+    reason: str,
 ) -> GuardEntry:
     return GuardEntry(
         key=key,
@@ -447,7 +469,7 @@ def make_direct_idiom_guard(
         rid=rid,
         cost=cost,
         value=value,
-        reason="direct_idiom_guard",
+        reason=reason,
         source_key=key,
         source_value=value,
         collision_value="",
@@ -610,13 +632,14 @@ def generate_guards(
         guards.append(guard)
         stats["seeded_fixed_guards"] += 1
 
-    for key, lid, rid, cost, value in DIRECT_IDIOM_GUARDS:
-        guard = make_direct_idiom_guard(
+    for key, lid, rid, cost, value, reason in DIRECT_FIXED_GUARDS:
+        guard = make_direct_fixed_guard(
             key=key,
             lid=lid,
             rid=rid,
             cost=cost,
             value=value,
+            reason=reason,
         )
         signature = (guard.key, guard.lid, guard.rid, guard.value)
         if signature in seen:
@@ -624,7 +647,7 @@ def generate_guards(
             continue
         seen.add(signature)
         guards.append(guard)
-        stats["direct_idiom_guards"] += 1
+        stats[reason] += 1
 
     guards.sort(key=lambda e: (e.key, e.value, e.lid, e.rid, e.cost))
 

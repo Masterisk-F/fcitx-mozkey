@@ -456,7 +456,7 @@ bool IsStrongExpressiveKanaAtom(absl::string_view atom) {
       atom);
 }
 
-bool IsBoundarySensitiveExpressiveKanaAtom(absl::string_view atom) {
+bool IsBoundarySensitiveExpressiveKanaCoreAtom(absl::string_view atom) {
   return ContainsStringView(
       {
           "ふん",
@@ -466,6 +466,16 @@ bool IsBoundarySensitiveExpressiveKanaAtom(absl::string_view atom) {
           "はて",
           "ふう",
           "ほう",
+          "ほい",
+          "ほいほい",
+          "へい",
+          "てへ",
+          "くちゃ",
+          "くちょ",
+          "ぐちょ",
+          "ぐちょぐちょ",
+          "どろどろ",
+          "つるつる",
           "はいはい",
           "うん",
           "うんうん",
@@ -525,6 +535,51 @@ bool IsHoFamilyExpressiveProsodyAtom(absl::string_view atom) {
 constexpr size_t kMaxExpressiveSokuonCount = 10;
 constexpr size_t kMaxEvaluativeSlangPrefixChars = 4;
 
+bool StripRepeatedExpressiveSokuonTail(absl::string_view atom,
+                                       absl::string_view* core) {
+  size_t sokuon_count = 0;
+  absl::string_view cursor = atom;
+
+  while (!cursor.empty()) {
+    absl::string_view rest;
+    char32_t last = 0;
+    if (!Util::SplitLastChar32(cursor, &rest, &last)) {
+      return false;
+    }
+
+    if (last != U'っ') {
+      break;
+    }
+
+    ++sokuon_count;
+    if (sokuon_count > kMaxExpressiveSokuonCount) {
+      return false;
+    }
+
+    cursor = rest;
+  }
+
+  if (sokuon_count == 0 || cursor.empty()) {
+    return false;
+  }
+
+  *core = cursor;
+  return true;
+}
+
+bool IsBoundarySensitiveExpressiveKanaAtom(absl::string_view atom) {
+  if (IsBoundarySensitiveExpressiveKanaCoreAtom(atom)) {
+    return true;
+  }
+
+  absl::string_view core;
+  if (!StripRepeatedExpressiveSokuonTail(atom, &core)) {
+    return false;
+  }
+
+  return IsBoundarySensitiveExpressiveKanaCoreAtom(core);
+}
+
 bool ConsumePrefixForLiveConversionMatcher(absl::string_view* text,
                                            absl::string_view prefix) {
   if (text->size() < prefix.size() ||
@@ -533,6 +588,19 @@ bool ConsumePrefixForLiveConversionMatcher(absl::string_view* text,
   }
   *text = text->substr(prefix.size());
   return true;
+}
+
+bool ConsumeAnyPrefixForLiveConversionMatcher(
+    absl::string_view* text,
+    std::initializer_list<absl::string_view> prefixes) {
+  for (absl::string_view prefix : prefixes) {
+    absl::string_view rest = *text;
+    if (ConsumePrefixForLiveConversionMatcher(&rest, prefix)) {
+      *text = rest;
+      return true;
+    }
+  }
+  return false;
 }
 
 bool IsOnlyLiveConversionProlongationMarks(absl::string_view text) {
@@ -596,6 +664,33 @@ bool ConsumeRepeatedExpressiveSokuon(absl::string_view* text) {
   }
 
   return sokuon_count > 0;
+}
+
+bool MatchesSokuonEndingMimeticAtom(absl::string_view atom,
+                                    absl::string_view stem) {
+  absl::string_view rest = atom;
+
+  if (!ConsumePrefixForLiveConversionMatcher(&rest, stem)) {
+    return false;
+  }
+
+  if (!ConsumeRepeatedExpressiveSokuon(&rest)) {
+    return false;
+  }
+
+  if (rest.empty()) {
+    return true;
+  }
+
+  return IsOnlyLiveConversionProlongationMarks(rest);
+}
+
+bool IsSokuonEndingMimeticAtom(absl::string_view atom) {
+  return MatchesSokuonEndingMimeticAtom(atom, "しゃ") ||
+         MatchesSokuonEndingMimeticAtom(atom, "どろ") ||
+         MatchesSokuonEndingMimeticAtom(atom, "とろ") ||
+         MatchesSokuonEndingMimeticAtom(atom, "さわ") ||
+         MatchesSokuonEndingMimeticAtom(atom, "つる");
 }
 
 bool MatchesRepeatedSokuonPrefix(absl::string_view atom,
@@ -995,13 +1090,13 @@ bool MatchesUhyoFamilyExpressiveProsodyAtom(absl::string_view atom) {
     return false;
   }
 
-  // Accept both 「うひょ」 and emphasized forms such as 「うっひょ」 and
-  // 「うっっひょ」.
-  if (!ConsumePrefixForLiveConversionMatcher(&rest, "ひょ")) {
+  // Accept both 「うひょ」/「うひゃ」 and emphasized forms such as
+  // 「うっひょ」, 「うっひゃ」, 「うっっひょ」 and 「うっっひゃ」.
+  if (!ConsumeAnyPrefixForLiveConversionMatcher(&rest, {"ひょ", "ひゃ"})) {
     if (!ConsumeRepeatedExpressiveSokuon(&rest)) {
       return false;
     }
-    if (!ConsumePrefixForLiveConversionMatcher(&rest, "ひょ")) {
+    if (!ConsumeAnyPrefixForLiveConversionMatcher(&rest, {"ひょ", "ひゃ"})) {
       return false;
     }
   }
@@ -1148,6 +1243,10 @@ bool ShouldHoldExpressiveKanaAtomForLiveConversion(
       return CanHoldLowAmbiguityExpressiveAtom(atom);
     }
 
+    if (IsSokuonEndingMimeticAtom(lexical_atom)) {
+      return CanHoldBoundarySensitiveExpressiveAtom(atom);
+    }
+
     if (IsBoundarySensitiveExpressiveKanaAtom(lexical_atom)) {
       return CanHoldBoundarySensitiveExpressiveAtom(atom);
     }
@@ -1163,10 +1262,59 @@ bool ShouldHoldExpressiveKanaAtomForLiveConversion(
   return false;
 }
 
+bool IsAsciiLetterForPendingRomanSuffix(char c) {
+  return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z');
+}
+
+bool StripTrailingAsciiLetterSuffix(absl::string_view text,
+                                    absl::string_view* core) {
+  size_t suffix_len = 0;
+
+  while (!text.empty() &&
+         IsAsciiLetterForPendingRomanSuffix(text.back())) {
+    text.remove_suffix(1);
+    ++suffix_len;
+  }
+
+  if (suffix_len == 0 || text.empty()) {
+    return false;
+  }
+
+  *core = text;
+  return true;
+}
+
+bool ShouldSkipLiveConversionForPendingRomanSuffixAfterExpressiveKana(
+    absl::string_view key,
+    LiveConversionLeftBoundary committed_left_boundary) {
+  absl::string_view kana_core;
+  if (!StripTrailingAsciiLetterSuffix(key, &kana_core)) {
+    return false;
+  }
+
+  const absl::string_view expressive_core =
+      StripTrailingLiveConversionSentenceTail(kana_core);
+  if (expressive_core.empty()) {
+    return false;
+  }
+
+  const LiveConversionAtom atom =
+      ExtractTrailingLiveConversionAtom(expressive_core,
+                                        committed_left_boundary);
+
+  return ShouldHoldExpressiveKanaAtomForLiveConversion(atom,
+                                                       expressive_core);
+}
+
 bool ShouldSkipLiveConversionForCompositionKey(
     absl::string_view key,
     LiveConversionLeftBoundary committed_left_boundary) {
   if (Util::CharsLen(key) < kMinLiveConversionCompositionLength) {
+    return true;
+  }
+
+  if (ShouldSkipLiveConversionForPendingRomanSuffixAfterExpressiveKana(
+          key, committed_left_boundary)) {
     return true;
   }
 
@@ -3934,6 +4082,7 @@ bool Session::MaybeScheduleLiveConversion(commands::Command* command) {
   if (ShouldSkipLiveConversionForCompositionKey(
           key, GetLiveConversionCommittedLeftBoundary(*context_)) ||
       length != context_->composer().GetCursor()) {
+    CancelPendingLiveConversion();
     return false;
   }
 
@@ -4016,7 +4165,9 @@ bool Session::ApplyDelayedLiveConversion(commands::Command* command) {
           current_key,
           GetLiveConversionCommittedLeftBoundary(*context_)) ||
       length != context_->composer().GetCursor()) {
-    return IgnoreStaleDelayedLiveConversion(command);
+    CancelPendingLiveConversion();
+    OutputFromState(command);
+    return true;
   }
 
   return MaybeStartLiveConversion(command);
