@@ -44,7 +44,7 @@ Windows 用のビルド済み MSI は [Releases](https://github.com/koyasi777/mo
 - 本 fork のリリースは個人用の experimental build として公開しています。
 - Zenz 同梱版は、ローカル推論 runtime と GGUF model を含むため、従来の offline MSI よりファイルサイズが大きくなります。
 - Windows 向けリリース MSI には、ローカル生成した `daily` system dictionary profile を同梱する場合があります。
-- `daily` profile には、Mozc 標準辞書に加えて、merge-ut-dictionaries、dic-nico-intersection-pixiv、mozcdic-ut-personal-names、Mozkey syntax guard dictionary 由来の生成辞書が含まれます。
+- `daily` profile には、Mozc 標準辞書に加えて、merge-ut-dictionaries、dic-nico-intersection-pixiv、mozcdic-ut-personal-names、Mozkey syntax / expressive kana guard dictionary 由来の生成辞書が含まれます。
 - 外部辞書・同梱 runtime・model の出典とライセンス note については [Third-party notices](THIRD_PARTY_NOTICES.md) を参照してください。
 
 > [!WARNING]
@@ -69,7 +69,7 @@ Windows 用のビルド済み MSI は [Releases](https://github.com/koyasi777/mo
 - ライブ変換は入力直後の不要な変換ちらつきを抑えるため、文字入力後に短いデバウンスを挟んで実行
 - 1文字だけの未確定文字列では、助詞などの誤変換を避けるためライブ変換を実行しない
 - `え~`、`えー`、`ん？` のような「かな1文字 + 装飾的な末尾記号」でも、短すぎる漢字化を避けるためライブ変換を抑制
-- `ふん`、`ふむ`、`はて`、`うひょー`、`すっごい`、`なっがい`、`めっちゃ`、`ちーっす`、`ちょりーっす` のような感嘆詞・口語評価語・くだけた挨拶が、ライブ変換中に不自然な漢字やカタカナへ寄る挙動を抑制
+- 感嘆詞・口語評価語・くだけた挨拶の入力途中ではライブ変換のちらつきを抑えつつ、完成した `うっそ`、`くっそ`、`やっば`、`すっげぇ`、`めっちゃ`、`ちっす`、`ちょりっす`、`ほえ～`、`ほぇ～`、`ほっほーん` などは生成辞書候補として自然なかな表記を救出
 - 確定済みの左文脈や直前の文節、限定的な右文脈を参照し、`mainにマージしました`、`githubには`、`2名しかいない`、`追記したい`、`山梨県立美術館`、`滋賀方面` のような文脈で、助詞・複合機能語・機能表現・接尾的な語構成・地名接尾構成が同音漢字候補に負ける挙動を抑制
 - キー設定エディタで、1つのキー入力に対して複数のコマンドを順序付きで割り当て可能
 - 複数コマンドは `Commit|IMEOff` のような形式で保存され、設定画面では `Commit → IMEOff` のように編集可能
@@ -176,17 +176,19 @@ Windows 版では、追加のオフライン防御層として、インストー
 
 また、`え~`、`えー`、`ん？` のように、かな1文字の後ろに装飾的な記号だけが続く場合もライブ変換を抑制します。これにより、入力途中の `え~` が `絵～` のように短すぎる漢字候補へ変換される挙動を避けます。
 
-さらに、短い感嘆詞、口語的な評価語、くだけた挨拶など、ひらがなのまま使われることが多い表現では、ライブ変換による過剰な漢字化・カタカナ化を抑制します。
+さらに、短い感嘆詞、口語的な評価語、くだけた挨拶などでは、入力途中の prefix や pending roman suffix によるライブ変換のちらつきを抑えます。一方で、完成した表現は session 側でライブ変換を止めず、converter と辞書候補に渡します。
+
+完成した expressive kana については、生成辞書に自然なかな候補を追加します。これにより初期状態では不自然な漢字分割に寄りにくくしつつ、ユーザーが `ウッソ`、`クッソ`、`ヤッバ`、`チッス`、`ホェ～` などのカタカナ表記を明示的に選んだ場合には、ユーザー履歴やユーザー辞書による表記選好が反映される余地を残します。
 
 対象には、たとえば以下のような入力が含まれます。
 
-- `ふん`、`ふむ`、`はて`、`ほう`
-- `うひょー`、`うっひょーん`、`うっそん`
-- `すっごい`、`なっがい`、`たっかい`、`あっちぃ`
-- `めっちゃ`
-- `ちっす`、`ちーっす`、`ちょーっす`、`ちょりーっす`
+- `うっそ`、`くっそ`、`やっば`、`やっべぇ`
+- `すっご`、`すっげぇ`、`めっちゃ`
+- `ちっす`、`ちょっす`、`ちょりっす`
+- `うひょ`、`うひゃ`、`ほほう`、`ほっほーん`
+- `ほえー`、`ほえ～`、`ほぇ`、`ほぇー`、`ほぇ～`
 
-これらは通常変換そのものを禁止するものではありません。Space を押した場合は従来どおり変換候補を出せます。ライブ変換中だけ、入力途中の短い口語表現が意図せず別の漢字語やカタカナ語へ先走って表示されることを避けます。
+これらは通常変換そのものを禁止するものではありません。完成した表現は通常の変換候補として扱われるため、Space 変換やユーザー履歴による候補順位の調整も従来どおり有効です。
 
 たとえば:
 
@@ -394,9 +396,10 @@ daily local 辞書は主に以下を元に生成できます。
   - 人名・芸名・活動名などを含む人名辞書
   - 生成済み daily 辞書、nico/pixiv delta、Mozc 標準辞書に既に存在する key/value は除外
   - 短すぎる読み、長いカタカナ塊、グループ名風表記、ASCII 表記、記号を含む表記などは除外または弱める
-- Mozkey syntax guard 辞書
+- Mozkey syntax / expressive kana guard 辞書
   - 文節区切り崩れの影響が大きいケースだけを小さな生成辞書として補強
-  - 例: `と打ちたいのに`、`に分ける`、`にまで`、`までに`、`までも`、`肌身離さず` のような経路を保護
+  - 例: `と打ちたいのに`、`に分ける`、`にまで`、`までに`、`までも`、`肌身離さず`、`になってしまいます`、`になっちゃいます` のような経路を保護
+  - 例: `うっそ`、`くっそ`、`やっば`、`ちっす`、`ほえ～`、`ほぇ～` のような完成済み expressive kana を自然なかな候補として補強
 
 巨大な生成辞書ファイルは、このリポジトリには commit しません。`src/data/dictionary_koyasi/generated/` 以下にローカル生成します。
 
@@ -504,7 +507,7 @@ Windows MSI packages are available from [Releases](https://github.com/koyasi777/
 - Releases from this fork are published as personal experimental builds.
 - Zenz-bundled builds are larger than the traditional offline MSI because they include a local inference runtime and a GGUF model.
 - Windows release MSI packages may include the locally generated `daily` system dictionary profile.
-- The `daily` profile is generated from the Mozc base dictionaries, merge-ut-dictionaries, dic-nico-intersection-pixiv, mozcdic-ut-personal-names, and the Mozkey syntax guard dictionary.
+- The `daily` profile is generated from the Mozc base dictionaries, merge-ut-dictionaries, dic-nico-intersection-pixiv, mozcdic-ut-personal-names, and the Mozkey syntax / expressive kana guard dictionary.
 - See [Third-party notices](THIRD_PARTY_NOTICES.md) for source and license notes for bundled runtimes, model files, and generated dictionary data.
 
 > [!WARNING]
@@ -534,7 +537,7 @@ Main features added in this fork
 - Applies live conversion after a short debounce delay to avoid noisy intermediate conversions
 - Suppresses live conversion for one-character compositions to avoid over-converting particles
 - Suppresses live conversion for very short kana compositions with decorative trailing symbols such as `え~`, `えー`, or `ん？`
-- Suppresses over-eager live conversion for short expressive kana utterances, colloquial evaluative forms, and casual greetings such as `ふん`, `ふむ`, `うひょー`, `すっごい`, `なっがい`, `めっちゃ`, `ちーっす`, and `ちょりーっす`
+- Suppresses live-conversion flicker for unfinished expressive kana prefixes, while completed expressive forms such as `うっそ`, `くっそ`, `やっば`, `すっげぇ`, `めっちゃ`, `ちっす`, `ちょりっす`, `ほえ～`, `ほぇ～`, and `ほっほーん` are rescued as generated dictionary candidates
 - Uses committed left context, previous segments, and limited right context to reduce unnatural homophone results in cases such as `mainにマージしました`, `githubには`, `2名しかいない`, `追記したい`, `山梨県立美術館`, and `滋賀方面`
 - Allows assigning multiple commands to a single key binding as an ordered command sequence
 - Stores command sequences as `Commit|IMEOff` and shows them in the keymap editor as `Commit → IMEOff`
@@ -607,9 +610,11 @@ To reduce distracting intermediate conversions, this fork applies live conversio
 
 Live conversion is also suppressed for very short kana compositions followed only by decorative trailing symbols, such as `え~`, `えー`, or `ん？`. This avoids noisy intermediate conversions such as `え~` becoming `絵～` while the user is still typing.
 
-This fork also keeps many short expressive kana utterances, colloquial evaluative forms, and casual greetings as kana during live conversion. Examples include `ふん`, `ふむ`, `はて`, `うひょー`, `うっそん`, `すっごい`, `なっがい`, `あっちぃ`, `めっちゃ`, `ちーっす`, and `ちょりーっす`.
+For short expressive kana utterances, colloquial evaluative forms, and casual greetings, this fork suppresses live-conversion flicker only while the user is still typing an unfinished prefix or a pending roman suffix. Completed expressions are allowed to reach the normal converter.
 
-This does not disable normal conversion. Pressing Space still invokes ordinary conversion candidates. The suppression only prevents live conversion from prematurely showing unnatural kanji or katakana results while the user is still composing these short colloquial expressions.
+For completed expressive forms, the generated dictionary adds natural kana candidates such as `うっそ`, `くっそ`, `やっば`, `すっげぇ`, `めっちゃ`, `ちっす`, `ちょりっす`, `ほえ～`, `ほぇ～`, and `ほっほーん`. This avoids pathological kanji segmentation by default while still allowing explicit user selections, user history, and user dictionary entries such as `ウッソ`, `クッソ`, `ヤッバ`, `チッス`, or `ホェ～` to influence future ranking.
+
+This does not disable normal conversion. Pressing Space still invokes ordinary conversion candidates, and completed expressive words remain ordinary converter candidates.
 
 For example:
 
@@ -863,9 +868,10 @@ The daily local dictionary can be generated from:
   - personal names, stage names, and activity names
   - entries already covered by the generated daily dictionary, nico/pixiv delta dictionary, or base Mozc dictionaries are skipped
   - risky short readings, long katakana-like names, group-like names, ASCII values, and punctuation-heavy values are filtered or demoted
-- Mozkey syntax guard dictionary
+- Mozkey syntax / expressive kana guard dictionary
   - small generated guard entries for high-impact segmentation failures
-  - for example, protecting paths such as `と打ちたいのに`, `に分ける`, `にまで`, `までに`, `までも`, and `肌身離さず`
+  - for example, protecting paths such as `と打ちたいのに`, `に分ける`, `にまで`, `までに`, `までも`, `肌身離さず`, `になってしまいます`, and `になっちゃいます`
+  - also adds natural kana candidates for completed expressive forms such as `うっそ`, `くっそ`, `やっば`, `ちっす`, `ほえ～`, `ほぇ～`, and `ほっほーん`
 
 Large generated dictionary files are not committed to this repository.
 They are generated locally under `src/data/dictionary_koyasi/generated/`.
