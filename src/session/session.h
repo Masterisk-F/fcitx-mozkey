@@ -322,6 +322,7 @@ class Session {
     std::string right_context;
     std::string context_class;
     std::string mozc_value;
+    std::string symbol_style_source;
     std::string prompt;
     absl::Time issued_at;
     bool pending = false;
@@ -366,6 +367,7 @@ class Session {
 
   uint32_t zenz_live_visible_generation_ = 0;
   std::string zenz_live_key_;
+  std::string zenz_live_display_key_;
   std::string zenz_live_value_;
   std::string zenz_live_mozc_value_;
   std::string zenz_live_context_class_;

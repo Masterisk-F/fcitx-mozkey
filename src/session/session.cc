@@ -2086,6 +2086,56 @@ void AddPreeditSegment(absl::string_view key,
   segment->set_value(std::string(value));
   segment->set_value_length(Util::CharsLen(value));
 }
+void RestorePreeditSegmentKeysForSymbolStyle(
+    absl::string_view symbol_style_source,
+    commands::Preedit* preedit) {
+  if (symbol_style_source.empty() || preedit == nullptr ||
+      preedit->segment_size() == 0) {
+    return;
+  }
+
+  // Restore only display keys.  The converter-owned internal key, candidate
+  // value, and feedback key remain unchanged.  Multi-segment preedit is handled
+  // by restoring the concatenated display key and then distributing it back by
+  // the original segment key character lengths.  This is safe for wave-dash
+  // restoration because ASCII '~', FULLWIDTH TILDE '～', and WAVE DASH '〜' are
+  // all single Unicode scalar values.
+  std::string full_key;
+  std::string full_value;
+  std::vector<size_t> segment_key_char_lengths;
+  segment_key_char_lengths.reserve(preedit->segment_size());
+
+  for (int i = 0; i < preedit->segment_size(); ++i) {
+    const commands::Preedit::Segment& segment = preedit->segment(i);
+    const absl::string_view segment_key =
+        segment.has_key() && !segment.key().empty()
+            ? absl::string_view(segment.key())
+            : absl::string_view(segment.value());
+
+    full_key.append(segment_key.data(), segment_key.size());
+    full_value.append(segment.value());
+    segment_key_char_lengths.push_back(Util::CharsLen(segment_key));
+  }
+
+  const std::string restored_key =
+      ZenzOutputValidator::RestoreUserVisibleSymbolStyle(
+          symbol_style_source, full_value, full_key);
+
+  if (restored_key == full_key ||
+      Util::CharsLen(restored_key) != Util::CharsLen(full_key)) {
+    return;
+  }
+
+  size_t offset = 0;
+  for (int i = 0; i < preedit->segment_size(); ++i) {
+    const size_t segment_chars = segment_key_char_lengths[i];
+    preedit->mutable_segment(i)->set_key(
+        std::string(Util::Utf8SubString(restored_key,
+                                        offset,
+                                        segment_chars)));
+    offset += segment_chars;
+  }
+}
 
 bool IsPlainBackspaceKey(const commands::KeyEvent& key) {
   return key.has_special_key() &&
@@ -4027,6 +4077,13 @@ bool Session::MaybeStartLiveConversion(commands::Command* command) {
   context_->mutable_converter()->SetCandidateListVisible(true);
 
   Output(command);
+
+  if (command->output().has_preedit()) {
+    RestorePreeditSegmentKeysForSymbolStyle(
+        live_conversion_preedit,
+        command->mutable_output()->mutable_preedit());
+  }
+
   command->mutable_output()->set_live_conversion(true);
   command->mutable_output()->set_live_conversion_pending(false);
 
@@ -4069,6 +4126,13 @@ bool Session::OutputPendingLiveConversion(commands::Command* command) const {
   // In that case, raw pending display is expected and should still be debounced.
   if (!has_stable_live_conversion) {
     OutputComposition(command);
+
+    if (command->output().has_preedit()) {
+      RestorePreeditSegmentKeysForSymbolStyle(
+          raw_preedit,
+          command->mutable_output()->mutable_preedit());
+    }
+
     commands::Output* output = command->mutable_output();
     output->clear_candidate_window();
     output->set_live_conversion(true);
@@ -4111,6 +4175,8 @@ bool Session::OutputPendingLiveConversion(commands::Command* command) const {
                       commands::Preedit::Segment::UNDERLINE,
                       preedit);
   }
+
+  RestorePreeditSegmentKeysForSymbolStyle(raw_preedit, preedit);
 
   preedit->set_cursor(Util::CharsLen(live_conversion_value_) +
                       Util::CharsLen(suffix_value));
@@ -4201,6 +4267,15 @@ bool Session::IgnoreStaleDelayedLiveConversion(commands::Command* command) {
 
   if (live_conversion_active_ && context_->state() == ImeContext::CONVERSION) {
     Output(command);
+
+    if (command->output().has_preedit()) {
+      RestorePreeditSegmentKeysForSymbolStyle(
+          live_conversion_preedit_.empty()
+              ? live_conversion_key_
+              : live_conversion_preedit_,
+          command->mutable_output()->mutable_preedit());
+    }
+
     command->mutable_output()->set_live_conversion(true);
     command->mutable_output()->set_live_conversion_pending(false);
     return true;
@@ -4795,6 +4870,7 @@ void Session::ClearZenzLiveCorrectionState() {
 
   zenz_live_visible_generation_ = 0;
   zenz_live_key_.clear();
+  zenz_live_display_key_.clear();
   zenz_live_value_.clear();
   zenz_live_mozc_value_.clear();
   zenz_live_context_class_.clear();
@@ -4949,6 +5025,9 @@ bool Session::MaybeApplyZenzFeedbackLiveCorrection(
 
     zenz_live_visible_generation_ = zenz_live_generation_;
     zenz_live_key_ = live_conversion_key_;
+    zenz_live_display_key_ = live_conversion_preedit_.empty()
+                                 ? live_conversion_key_
+                                 : live_conversion_preedit_;
     zenz_live_value_ = feedback_value;
     zenz_live_mozc_value_ = live_conversion_value_;
     zenz_live_context_class_ = context_class;
@@ -5070,6 +5149,9 @@ bool Session::MaybeScheduleZenzLiveCorrection(commands::Command* command) {
   pending_zenz_live_.right_context = right_context_for_prompt;
   pending_zenz_live_.context_class = context_result.context_class;
   pending_zenz_live_.mozc_value = live_conversion_value_;
+  pending_zenz_live_.symbol_style_source =
+      live_conversion_preedit_.empty() ? live_conversion_key_
+                                       : live_conversion_preedit_;
   pending_zenz_live_.prompt = prompt;
   pending_zenz_live_.issued_at = Clock::GetAbslTime();
   pending_zenz_live_.pending = true;
@@ -5265,6 +5347,15 @@ bool Session::OutputCurrentLiveConversionWithZenzPending(
 
   if (live_conversion_active_ && context_->state() == ImeContext::CONVERSION) {
     Output(command);
+
+    if (command->output().has_preedit()) {
+      RestorePreeditSegmentKeysForSymbolStyle(
+          live_conversion_preedit_.empty()
+              ? live_conversion_key_
+              : live_conversion_preedit_,
+          command->mutable_output()->mutable_preedit());
+    }
+
     commands::Output* output = command->mutable_output();
     output->set_live_conversion(true);
     output->set_live_conversion_pending(false);
@@ -5283,6 +5374,14 @@ bool Session::OutputCurrentLiveConversionAfterZenzStop(
 
   if (live_conversion_active_ && context_->state() == ImeContext::CONVERSION) {
     Output(command);
+
+    if (command->output().has_preedit()) {
+      RestorePreeditSegmentKeysForSymbolStyle(
+          live_conversion_preedit_.empty()
+              ? live_conversion_key_
+              : live_conversion_preedit_,
+          command->mutable_output()->mutable_preedit());
+    }
 
     commands::Output* output = command->mutable_output();
     output->set_live_conversion(true);
@@ -5441,6 +5540,15 @@ bool Session::ApplyZenzLiveCorrectionResult(
 
     CancelPendingZenzLiveCorrection();
     Output(command);
+
+    if (command->output().has_preedit()) {
+      RestorePreeditSegmentKeysForSymbolStyle(
+          live_conversion_preedit_.empty()
+              ? live_conversion_key_
+              : live_conversion_preedit_,
+          command->mutable_output()->mutable_preedit());
+    }
+
     command->mutable_output()->set_live_conversion(true);
     command->mutable_output()->set_live_conversion_pending(false);
     command->mutable_output()->set_zenz_live_correction_pending(false);
@@ -5459,6 +5567,30 @@ bool Session::ApplyZenzLiveCorrectionResult(
     ZenzDebugOutput(absl::StrCat(
         "[zenz] stripped left_context prefix ",
         ZenzRedactedTextStats("value", zenz_value),
+        " context_class=", pending_zenz_live_.context_class));
+  }
+
+  const absl::string_view zenz_symbol_style_source =
+      pending_zenz_live_.symbol_style_source.empty()
+          ? pending_zenz_live_.key
+          : pending_zenz_live_.symbol_style_source;
+
+  const std::string zenz_value_before_symbol_restore = zenz_value;
+  zenz_value = ZenzOutputValidator::RestoreUserVisibleSymbolStyle(
+      zenz_symbol_style_source, pending_zenz_live_.mozc_value, zenz_value);
+
+  const std::string zenz_display_key =
+      ZenzOutputValidator::RestoreUserVisibleSymbolStyle(
+          zenz_symbol_style_source,
+          pending_zenz_live_.mozc_value,
+          pending_zenz_live_.key);
+
+  if (zenz_value != zenz_value_before_symbol_restore) {
+    ZenzDebugOutput(absl::StrCat(
+        "[zenz] restored symbol style ",
+        ZenzRedactedTextStats("value", zenz_value),
+        " ", ZenzRedactedTextStats("raw_value",
+                                   zenz_value_before_symbol_restore),
         " context_class=", pending_zenz_live_.context_class));
   }
 
@@ -5489,6 +5621,15 @@ bool Session::ApplyZenzLiveCorrectionResult(
 
     CancelPendingZenzLiveCorrection();
     Output(command);
+
+    if (command->output().has_preedit()) {
+      RestorePreeditSegmentKeysForSymbolStyle(
+          live_conversion_preedit_.empty()
+              ? live_conversion_key_
+              : live_conversion_preedit_,
+          command->mutable_output()->mutable_preedit());
+    }
+
     command->mutable_output()->set_live_conversion(true);
     command->mutable_output()->set_live_conversion_pending(false);
     command->mutable_output()->set_zenz_live_correction_pending(false);
@@ -5512,6 +5653,15 @@ bool Session::ApplyZenzLiveCorrectionResult(
 
     CancelPendingZenzLiveCorrection();
     Output(command);
+
+    if (command->output().has_preedit()) {
+      RestorePreeditSegmentKeysForSymbolStyle(
+          live_conversion_preedit_.empty()
+              ? live_conversion_key_
+              : live_conversion_preedit_,
+          command->mutable_output()->mutable_preedit());
+    }
+
     command->mutable_output()->set_live_conversion(true);
     command->mutable_output()->set_live_conversion_pending(false);
     command->mutable_output()->set_zenz_live_correction_pending(false);
@@ -5535,6 +5685,15 @@ bool Session::ApplyZenzLiveCorrectionResult(
 
     CancelPendingZenzLiveCorrection();
     Output(command);
+
+    if (command->output().has_preedit()) {
+      RestorePreeditSegmentKeysForSymbolStyle(
+          live_conversion_preedit_.empty()
+              ? live_conversion_key_
+              : live_conversion_preedit_,
+          command->mutable_output()->mutable_preedit());
+    }
+
     command->mutable_output()->set_live_conversion(true);
     command->mutable_output()->set_live_conversion_pending(false);
     command->mutable_output()->set_zenz_live_correction_pending(false);
@@ -5581,6 +5740,7 @@ bool Session::ApplyZenzLiveCorrectionResult(
 
   zenz_live_visible_generation_ = pending_zenz_live_.generation;
   zenz_live_key_ = pending_zenz_live_.key;
+  zenz_live_display_key_ = zenz_display_key;
   zenz_live_value_ = zenz_value;
   zenz_live_mozc_value_ = pending_zenz_live_.mozc_value;
   zenz_live_context_class_ = context_class.empty() ? "empty" : context_class;
@@ -5605,8 +5765,11 @@ bool Session::OutputZenzLiveCorrection(
   commands::Preedit* preedit = output->mutable_preedit();
   preedit->Clear();
 
+  const absl::string_view display_key =
+      zenz_live_display_key_.empty() ? zenz_live_key_ : zenz_live_display_key_;
+
   AddPreeditSegment(
-      zenz_live_key_,
+      display_key,
       value,
       commands::Preedit::Segment::HIGHLIGHT,
       preedit);

@@ -615,6 +615,41 @@ TEST(ZenzPromptBuilderTest, SanitizesConditionFields) {
                 std::string("\xEE\xB8\x81"),
             builder.Build(reading, options));
 }
+
+TEST(ZenzOutputValidatorTest,
+     RestoresFullwidthWaveDashBeforeLiveCorrectionValidation) {
+  EXPECT_EQ(ZenzOutputValidator::RestoreUserVisibleSymbolStyle(
+                "う～ん", "う～ん", "う~ん"),
+            "う～ん");
+}
+
+TEST(ZenzOutputValidatorTest,
+     RestoresWaveDashWithoutDiscardingOtherZenzCorrection) {
+  EXPECT_EQ(ZenzOutputValidator::RestoreUserVisibleSymbolStyle(
+                "う～んむずかしい", "う～んむずかしい",
+                "う~ん難しい"),
+            "う～ん難しい");
+}
+
+TEST(ZenzOutputValidatorTest, PreservesIntentionalAsciiTilde) {
+  EXPECT_EQ(ZenzOutputValidator::RestoreUserVisibleSymbolStyle(
+                "う~ん", "う~ん", "う~ん"),
+            "う~ん");
+}
+
+TEST(ZenzOutputValidatorTest,
+     RestoresRawPreeditWaveDashEvenWhenMozcValueContainsAsciiTilde) {
+  EXPECT_EQ(ZenzOutputValidator::RestoreUserVisibleSymbolStyle(
+                "う～ん", "う~ん", "う~ん"),
+            "う～ん");
+}
+
+TEST(ZenzOutputValidatorTest, RestoresWaveDashCodePointStyle) {
+  EXPECT_EQ(ZenzOutputValidator::RestoreUserVisibleSymbolStyle(
+                "う〜ん", "う〜ん", "う~ん"),
+            "う〜ん");
+}
+
 class SessionTest : public testing::TestWithTempUserProfile {
  protected:
   void SetUp() override {
