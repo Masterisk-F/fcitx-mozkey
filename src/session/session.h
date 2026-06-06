@@ -319,6 +319,7 @@ class Session {
     uint32_t generation = 0;
     std::string key;
     std::string left_context;
+    std::string right_context;
     std::string context_class;
     std::string mozc_value;
     std::string prompt;
@@ -538,6 +539,7 @@ class Session {
   void CancelPendingZenzLiveCorrection();
   void ClearZenzLiveCorrectionState();
   std::string ExtractZenzLeftContext(uint32_t max_chars) const;
+  std::string ExtractZenzRightContext(uint32_t max_chars) const;
 
   // Fill command's output according to the current state.
   void OutputFromState(mozc::commands::Command* command);

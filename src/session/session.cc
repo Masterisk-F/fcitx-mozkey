@@ -191,6 +191,8 @@ constexpr uint32_t kDefaultZenzLiveCorrectionTimeoutMsec = 180;
 constexpr uint32_t kDefaultZenzLiveCorrectionPollMsec = 24;
 constexpr uint32_t kDefaultZenzLiveCorrectionMinKeyLength = 2;
 constexpr uint32_t kDefaultZenzLiveCorrectionLeftContextLength = 24;
+constexpr uint32_t kDefaultZenzLiveCorrectionRightContextLength = 10;
+constexpr uint32_t kMaxZenzLiveCorrectionRightContextLength = 128;
 constexpr uint32_t kMaxZenzLiveCorrectionDelayMsec = 5000;
 constexpr uint32_t kMaxZenzLiveCorrectionTimeoutMsec = 1000;
 
@@ -1405,6 +1407,20 @@ uint32_t GetZenzLiveCorrectionLeftContextLength(
     return kDefaultZenzLiveCorrectionLeftContextLength;
   }
   return config.zenz_live_correction_left_context_length();
+}
+
+uint32_t GetZenzLiveCorrectionRightContextLength(
+    const config::Config& config) {
+  if (!config.use_zenz_live_correction_right_context()) {
+    return 0;
+  }
+
+  const uint32_t length =
+      config.has_zenz_live_correction_right_context_length()
+          ? config.zenz_live_correction_right_context_length()
+          : kDefaultZenzLiveCorrectionRightContextLength;
+  return std::min<uint32_t>(length,
+                            kMaxZenzLiveCorrectionRightContextLength);
 }
 
 bool UseZenzFeedbackLearning(const config::Config& config) {
@@ -4216,6 +4232,35 @@ std::string Session::ExtractZenzLeftContext(uint32_t max_chars) const {
     Util::Utf8SubString(preceding_text, len - max_chars, max_chars));
 }
 
+std::string Session::ExtractZenzRightContext(uint32_t max_chars) const {
+  if (max_chars == 0) {
+    return "";
+  }
+
+  if (!context_->client_context().has_following_text()) {
+    return "";
+  }
+
+  const std::string& following_text =
+      context_->client_context().following_text();
+
+  // Right context should describe the continuation of the current line.
+  // Do not let text from following lines leak into the Zenz prompt, because
+  // multi-line editors often expose the rest of the document as following_text.
+  const size_t line_break_pos = following_text.find_first_of("\r\n");
+  const std::string current_line =
+      line_break_pos == std::string::npos
+          ? following_text
+          : following_text.substr(0, line_break_pos);
+
+  const size_t len = Util::CharsLen(current_line);
+  if (len <= max_chars) {
+    return current_line;
+  }
+
+  return std::string(Util::Utf8SubString(current_line, 0, max_chars));
+}
+
 std::string Session::BuildZenzFeedbackContextClass(
     absl::string_view left_context) const {
   const ZenzContextSanitizationResult result =
@@ -4916,6 +4961,8 @@ bool Session::MaybeScheduleZenzLiveCorrection(commands::Command* command) {
 
   const uint32_t left_context_len =
       GetZenzLiveCorrectionLeftContextLength(config);
+  const uint32_t right_context_len =
+      GetZenzLiveCorrectionRightContextLength(config);
 
   const std::string raw_left_context =
       ExtractZenzLeftContext(left_context_len);
@@ -4928,15 +4975,35 @@ bool Session::MaybeScheduleZenzLiveCorrection(commands::Command* command) {
           ? context_result.sanitized_context
           : std::string();
 
+  const std::string raw_right_context =
+      ExtractZenzRightContext(right_context_len);
+  const ZenzContextSanitizationResult right_context_result =
+      zenz_context_sanitizer_.SanitizeForZenz(
+          raw_right_context, right_context_len);
+
+  const std::string right_context_for_prompt =
+      right_context_result.allowed_for_prompt
+          ? right_context_result.sanitized_context
+          : std::string();
+
+  ZenzPromptOptions prompt_options;
+  prompt_options.left_context = left_context_for_prompt;
+  prompt_options.right_context = right_context_for_prompt;
+  prompt_options.profile = config.zenz_live_correction_profile();
+  prompt_options.topic = config.zenz_live_correction_topic();
+  prompt_options.style = config.zenz_live_correction_style();
+  prompt_options.settings = config.zenz_live_correction_settings();
+
   ZenzPromptBuilder prompt_builder;
   const std::string prompt =
-      prompt_builder.Build(left_context_for_prompt, live_conversion_key_);
+      prompt_builder.Build(live_conversion_key_, prompt_options);
 
   ++zenz_live_generation_;
 
   pending_zenz_live_.generation = zenz_live_generation_;
   pending_zenz_live_.key = live_conversion_key_;
   pending_zenz_live_.left_context = left_context_for_prompt;
+  pending_zenz_live_.right_context = right_context_for_prompt;
   pending_zenz_live_.context_class = context_result.context_class;
   pending_zenz_live_.mozc_value = live_conversion_value_;
   pending_zenz_live_.prompt = prompt;
@@ -4951,7 +5018,10 @@ bool Session::MaybeScheduleZenzLiveCorrection(commands::Command* command) {
       " ", ZenzRedactedTextStats("mozc_value", live_conversion_value_),
       " context_class=", context_result.context_class,
       " context_allowed=", ZenzBool(context_result.allowed_for_prompt),
-      " context_reason=", context_result.reason));
+      " context_reason=", context_result.reason,
+      " right_context_allowed=",
+      ZenzBool(right_context_result.allowed_for_prompt),
+      " right_context_reason=", right_context_result.reason));
 
   AttachZenzLiveCorrectionStartCallback(command);
   command->mutable_output()->set_zenz_live_correction_pending(true);
@@ -5218,7 +5288,9 @@ bool Session::ApplyZenzLiveCorrection(commands::Command* command) {
                                     pending_zenz_live_.mozc_value),
         " context_class=", pending_zenz_live_.context_class,
         " ", ZenzRedactedTextStats("context",
-                                    pending_zenz_live_.left_context)));
+                                    pending_zenz_live_.left_context),
+        " ", ZenzRedactedTextStats("right_context",
+                                    pending_zenz_live_.right_context)));
 
     EnsureZenzLiveCorrector()->Submit(std::move(request));
 
