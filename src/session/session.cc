@@ -1264,6 +1264,70 @@ bool ShouldHoldExpressiveKanaAtomForLiveConversion(
   return false;
 }
 
+bool FindEvaluativeSlangAdjectivePrefixSuffix(
+    absl::string_view text,
+    absl::string_view* suffix) {
+  size_t offset = 0;
+  for (absl::string_view c : Utf8AsChars(text)) {
+    const absl::string_view candidate = text.substr(offset);
+    if (IsEvaluativeSlangAdjectivePrefixAtom(candidate)) {
+      *suffix = candidate;
+      return true;
+    }
+    offset += c.size();
+  }
+
+  return false;
+}
+
+bool ShouldHoldEvaluativeSlangAdjectivePrefixForLiveConversion(
+    const LiveConversionAtom& atom,
+    absl::string_view lexical_core) {
+  if (IsEvaluativeSlangAdjectivePrefixAtom(atom.text)) {
+    return atom.is_entire_composition ||
+           atom.left_boundary == LiveConversionLeftBoundary::kKnownBoundary;
+  }
+
+  absl::string_view suffix;
+  if (!FindEvaluativeSlangAdjectivePrefixSuffix(lexical_core, &suffix)) {
+    return false;
+  }
+
+  // Protect short colloquial phrase prefixes such as 「これやっ」 or
+  // 「まじでなっ」, but let completed forms like 「これやっば」 reach the
+  // converter so user history and user dictionary preferences can apply.
+  return HasShortPrefixBeforeSuffix(
+      lexical_core, suffix, kMaxEvaluativeSlangPrefixChars);
+}
+
+bool ShouldHoldExpressiveKanaTypingPrefixForLiveConversion(
+    const LiveConversionAtom& atom,
+    absl::string_view expressive_core) {
+  if (atom.text.empty()) {
+    return false;
+  }
+
+  if (IsUhyoFamilyExpressiveProsodyPrefixAtom(atom.text) ||
+      IsUsoOrKusoFamilyExpressiveProsodyPrefixAtom(atom.text) ||
+      IsCasualSsuGreetingPrefixAtom(atom.text)) {
+    return CanHoldLowAmbiguityExpressiveAtom(atom);
+  }
+
+  const absl::string_view lexical_atom =
+      StripTrailingLiveConversionProlongationMarks(atom.text);
+  const absl::string_view lexical_core =
+      StripTrailingLiveConversionProlongationMarks(expressive_core);
+
+  if (!lexical_atom.empty() &&
+      Util::IsScriptType(lexical_atom, Util::HIRAGANA) &&
+      ShouldHoldEvaluativeSlangAdjectivePrefixForLiveConversion(
+          atom, lexical_core)) {
+    return true;
+  }
+
+  return false;
+}
+
 bool IsAsciiLetterForPendingRomanSuffix(char c) {
   return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z');
 }
@@ -1320,18 +1384,18 @@ bool ShouldSkipLiveConversionForCompositionKey(
     return true;
   }
 
-  // First, protect short expressive utterance atoms before applying the legacy
-  // decorative-tail rule.  In particular, do not strip "ー" here; otherwise
-  // forms such as 「ほほー」 would collapse to 「ほほ」 and lose their expressive
-  // prosody.
+  // Keep only unfinished expressive typing prefixes out of live conversion.
+  // Completed expressive words should reach the converter so that normal
+  // dictionary ranking, user history, and user dictionary entries can decide
+  // between hiragana and katakana spellings.
   const absl::string_view expressive_core =
       StripTrailingLiveConversionSentenceTail(key);
   if (!expressive_core.empty()) {
     const LiveConversionAtom atom =
         ExtractTrailingLiveConversionAtom(expressive_core,
                                           committed_left_boundary);
-    if (ShouldHoldExpressiveKanaAtomForLiveConversion(atom,
-                                                      expressive_core)) {
+    if (ShouldHoldExpressiveKanaTypingPrefixForLiveConversion(
+            atom, expressive_core)) {
       return true;
     }
   }

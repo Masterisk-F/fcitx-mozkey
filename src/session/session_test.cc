@@ -1533,258 +1533,135 @@ TEST_F(SessionTest,
   EXPECT_EQ(session.context().state(), ImeContext::COMPOSITION);
 }
 
-TEST_F(SessionTest, LiveConversionKeepsExpressiveKanaAtomsAsComposition) {
+TEST_F(SessionTest,
+       LiveConversionRunsConverterForDictionaryBackedExpressiveKanaAtoms) {
   constexpr absl::string_view kExpressiveAtoms[] = {
-      "ふん",
-      "ふんっ",
-      "ふんっっ",
-      "ふんっっっー",
-      "ふむっ",
-      "ほうっっ",
-      "ちっ",
-      "ちぇっ",
-      "くそ",
-      "よう",
-      "ふむ",
-      "はて",
-      "ほっ",
-      "ふう",
-      "いてっ",
-      "ぎゃっ",
-      "ひゃっ",
-      "ほう",
-      "はいはい",
-      "ほっほーん",
-
-      "ほい",
-      "ほいっ",
-      "ほいっっ",
-      "ほいほい",
-      "ほいほいっ",
-      "へい",
-      "へいっ",
-      "へいっっ",
-
-      "しゃっ",
-      "しゃっっ",
-      "しゃっー",
-
-      "てへ",
-      "てへっ",
-      "てへっっ",
-
-      "くちゃ",
-      "くちょ",
-      "ぐちょ",
-      "ぐちょっ",
-      "ぐちょっっ",
-      "ぐちょぐちょ",
-      "ぐちょぐちょっ",
-
-      "どろっ",
-      "どろっっ",
-      "どろっー",
-      "どろどろ",
-      "どろどろっ",
-      "とろっ",
-      "とろっっ",
-      "とろっー",
-      "さわっ",
-      "さわっっ",
-      "さわっー",
-      "つるっ",
-      "つるっっ",
-      "つるっー",
-      "つるつる",
-      "つるつるっ",
-
+      "うっそ",
+      "うっそー",
+      "うっそん",
+      "うっっそ",
+      "うっっっそーん",
+      "くっそ",
+      "くっそー",
+      "くっっそ",
+      "くっっっそー",
+      "やっば",
+      "やっっばい",
+      "やっべぇ",
+      "やっっべー",
+      "すっご",
+      "すっっごい",
+      "すっげぇ",
+      "すっっげー",
+      "すっくな",
+      "すっくねぇ",
+      "すっぱ",
+      "すっぺぇ",
+      "こっわ",
+      "こっっわい",
+      "つっよ",
+      "つっっよい",
+      "つっら",
+      "つっれぇ",
+      "でっか",
+      "でっっかい",
+      "なっが",
+      "なっっがい",
+      "たっか",
+      "たっけぇ",
+      "ちっさ",
+      "ちっちゃ",
+      "ちっせぇ",
+      "ひっく",
+      "ひっろ",
+      "さっむ",
+      "さっみぃ",
+      "さっみい",
+      "あっつ",
+      "あっちぃ",
+      "あっちい",
+      "あっっか",
+      "うっま",
+      "うっめぇ",
+      "うっざ",
+      "うっぜぇ",
+      "うっす",
+      "かっる",
+      "きっつ",
+      "きっちぃ",
+      "きっも",
+      "きっれい",
+      "だっる",
+      "だっりぃ",
+      "だっさ",
+      "だっせぇ",
+      "えっぐ",
+      "えっっぐ",
+      "えっぐい",
+      "えっっぐい",
+      "くっさ",
+      "くっせ",
+      "くっっせ",
+      "くっせぇ",
+      "くっろ",
+      "おっも",
+      "おっそ",
+      "はっや",
+      "めっちゃ",
+      "めっっちゃ",
+      "もっっと",
+      "もっっっと",
+      "ねっむ",
+      "ほっそ",
+      "せっま",
+      "みっじか",
+      "しっろ",
       "ちっす",
       "ちっっす",
       "ちーっす",
       "ちぃーっす",
-      "ちぃーーっす",
-      "ちーっすー",
       "ちょっす",
       "ちょーっす",
-      "ちょーっすー",
       "ちょりっす",
       "ちょりーっす",
-      "ちょりーっすー",
-
       "うひょ",
       "うひょー",
       "うひょーん",
       "うっひょ",
       "うっひょー",
       "うっひょーん",
-      "うっっひょ",
-      "うっっひょーん",
-
       "うひゃ",
       "うひゃー",
       "うひゃ～",
       "うひゃーん",
       "うっひゃ",
       "うっひゃー",
-      "うっひゃーん",
-      "うっっひゃ",
-      "うっっひゃーん",
-
-      "うっそん",
-      "うっっそ",
-      "うっっっそーん",
-      "くっそ",
-      "くっっそ",
-      "くっっっそー",
-
-      "やっば",
-      "やっっばい",
-      "やっべぇ",
-      "やっっべー",
-
-      "すっご",
-      "すっっごい",
-      "すっげぇ",
-      "すっっげー",
-      "すっくな",
-      "すっっくない",
-      "すっくね",
-      "すっっくねぇ",
-      "すっくねえ",
-      "すっくねー",
-      "すっぱ",
-      "すっっぱ",
-      "すっっっぱ",
-      "すっぱー",
-      "すっっぱー",
-      "すっぺぇ",
-      "すっっぺー",
-
-      "こっわ",
-      "こっっわい",
-
-      "つっよ",
-      "つっっよい",
-      "つっら",
-      "つっっらい",
-      "つっれぇ",
-      "つっっれー",
-
-      "でっか",
-      "でっっかい",
-
-      "なっが",
-      "なっっがい",
-
-      "たっか",
-      "たっっかい",
-      "たっけぇ",
-      "たっっけー",
-
-      "ちっさ",
-      "ちっっさい",
-      "ちっちゃ",
-      "ちっっちゃい",
-      "ちっせぇ",
-      "ちっっせー",
-
-      "ひっく",
-      "ひっっくい",
-      "ひっろ",
-      "ひっっろい",
-
-      "さっむ",
-      "さっっむい",
-      "さっみぃ",
-      "さっっみー",
-
-      "あっつ",
-      "あっっつい",
-      "あっちぃ",
-      "あっっちー",
-
-      "うっま",
-      "うっっまい",
-      "うっめぇ",
-      "うっっめー",
-      "うっざ",
-      "うっっざい",
-      "うっぜぇ",
-      "うっっぜー",
-      "うっす",
-      "うっっすい",
-
-      "かっる",
-      "かっっるい",
-
-      "きっつ",
-      "きっっつい",
-      "きっちぃ",
-      "きっっちー",
-      "きっも",
-      "きっっもい",
-      "きっれい",
-      "きっっれい",
-
-      "だっる",
-      "だっっるい",
-      "だっりぃ",
-      "だっっりー",
-      "だっさ",
-      "だっっさい",
-      "だっせぇ",
-      "だっっせー",
-
-      "えっぐ",
-      "えっっぐい",
-
-      "くっさ",
-      "くっっさい",
-      "くっせぇ",
-      "くっっせー",
-      "くっろ",
-      "くっっろい",
-
-      "まっぶし",
-      "まっっぶしい",
-
-      "おっも",
-      "おっっもい",
-      "おっそ",
-      "おっっそい",
-
-      "はっや",
-      "はっっやい",
-
-      "めっちゃ",
-      "めっっちゃ",
-
-      "もっと",
-      "もっっと",
-      "もっっっと",
-      "もっとー",
-      "もっっとー",
-
-      "ねっむ",
-      "ねっっむい",
-
-      "ほっそ",
-      "ほっっそい",
-
-      "せっま",
-      "せっっまい",
-
-      "みっじか",
-      "みっっじかい",
-
-      "しっろ",
-      "しっっろい",
-
-      "ええ",
-      "えぇ",
-      "ぇぇ",
-      "えぇぇ",
-      "えぇー",
+      "ほほう",
+      "ほっほーん",
+      "くちゃ",
+      "くちょ",
+      "ぐちょ",
+      "ぐちょっ",
+      "ぐちょぐちょ",
+      "ぐちょぐちょっ",
+      "ぐちょっと",
+      "どろっ",
+      "どろどろ",
+      "とろっ",
+      "さわっ",
+      "つるっ",
+      "つるつる",
+      "ほえー",
+      "ほえ～",
+      "ほぇ",
+      "ほぇー",
+      "ほぇ～",
+      "ほえぇ",
+      "ほえぇー",
+      "ほえぇ～",
+      "ほぇぇ",
+      "ほぇぇー",
+      "ほぇぇ～",
   };
 
   for (absl::string_view expressive_atom : kExpressiveAtoms) {
@@ -1801,22 +1678,22 @@ TEST_F(SessionTest, LiveConversionKeepsExpressiveKanaAtomsAsComposition) {
     config.set_live_conversion_delay_msec(0);
     session.SetConfig(config);
 
-    std::vector<std::string> chars;
+    std::vector<absl::string_view> chars;
     for (absl::string_view c : Utf8AsChars(expressive_atom)) {
-      chars.emplace_back(c);
+      chars.push_back(c);
     }
-    ASSERT_GE(chars.size(), 2);
+    ASSERT_FALSE(chars.empty());
 
     std::string prefix;
     std::string prefix_key_codes;
     for (size_t i = 0; i + 1 < chars.size(); ++i) {
-      prefix.append(chars[i]);
+      absl::StrAppend(&prefix, chars[i]);
       prefix_key_codes.push_back('a');
     }
 
-    // Some prefixes such as 「ちぇ」「いて」「はいは」 are intentionally not
-    // covered by the prefix test.  This test verifies that the completed
-    // expressive atom is held as kana during live conversion.
+    // Prefixes may be held as composition or may attempt live conversion.
+    // The assertion below is only about the completed dictionary-backed
+    // expressive word.
     EXPECT_CALL(*converter, StartConversion(_, _))
         .Times(::testing::AnyNumber())
         .WillRepeatedly(Return(false));
@@ -1826,15 +1703,25 @@ TEST_F(SessionTest, LiveConversionKeepsExpressiveKanaAtomsAsComposition) {
 
     Mock::VerifyAndClearExpectations(converter.get());
 
-    EXPECT_CALL(*converter, StartConversion(_, _)).Times(0);
+    Segments segments;
+    Segment* segment = segments.add_segment();
+    segment->set_key(std::string(expressive_atom));
+    converter::Candidate* candidate = segment->add_candidate();
+    candidate->key = std::string(expressive_atom);
+    candidate->content_key = std::string(expressive_atom);
+    candidate->value = std::string(expressive_atom);
+
+    EXPECT_CALL(*converter, StartConversion(_, _))
+        .Times(AtLeast(1))
+        .WillRepeatedly(DoAll(SetArgPointee<1>(segments), Return(true)));
 
     command.Clear();
     InsertCharacterString(chars.back(), "a", &session, &command);
 
     EXPECT_EQ(session.context().composer().GetQueryForConversion(),
               expressive_atom);
-    EXPECT_EQ(session.context().state(), ImeContext::COMPOSITION);
-    EXPECT_PREEDIT(expressive_atom, command);
+    EXPECT_EQ(session.context().state(), ImeContext::CONVERSION);
+    EXPECT_TRUE(command.output().live_conversion());
 
     Mock::VerifyAndClearExpectations(converter.get());
   }
@@ -1954,13 +1841,9 @@ TEST_F(SessionTest,
   };
 
   constexpr TestCase kTestCases[] = {
-      {"ち", "ssu", "ちっす"},
-      {"ちー", "ssu", "ちーっす"},
-      {"ちぃー", "ssu", "ちぃーっす"},
+      // Completed forms such as 「ちっす」 are now routed to the converter.
+      // This test keeps only a genuinely pending roman suffix.
       {"ちょ", "r", "ちょr"},
-      {"ちょー", "ssu", "ちょーっす"},
-      {"ちょり", "ssu", "ちょりっす"},
-      {"ちょりー", "ssu", "ちょりーっす"},
   };
 
   for (const TestCase& test_case : kTestCases) {
@@ -2189,7 +2072,7 @@ TEST_F(SessionTest,
   EXPECT_TRUE(SendKey("Escape", &session, &command));
 
   command.Clear();
-  InsertCharacterString("ふんっっ", "aaaa", &session, &command);
+  InsertCharacterString("やっっ", "aaa", &session, &command);
 
   command.Clear();
   command.mutable_input()->set_type(commands::Input::SEND_COMMAND);
@@ -2198,7 +2081,7 @@ TEST_F(SessionTest,
   EXPECT_TRUE(session.SendCommand(&command));
   EXPECT_FALSE(command.output().live_conversion());
   EXPECT_FALSE(command.output().live_conversion_pending());
-  EXPECT_TRUE(EnsurePreedit("ふんっっ", command));
+  EXPECT_TRUE(EnsurePreedit("やっっ", command));
 }
 
 TEST_F(SessionTest,
@@ -2249,21 +2132,22 @@ TEST_F(SessionTest,
 TEST_F(SessionTest,
        LiveConversionKeepsExpressiveKanaWithPendingRomanSuffixAsComposition) {
   struct TestCase {
-    absl::string_view key;
+    absl::string_view kana_prefix;
+    absl::string_view roman_suffix;
     absl::string_view expected_preedit;
   };
 
   constexpr TestCase kTestCases[] = {
-      {"ふんl", "ふんｌ"},
-      {"ふんlt", "ふんｌｔ"},
-      {"ふんっl", "ふんっｌ"},
-      {"ふんっlt", "ふんっｌｔ"},
-      {"ふんっっl", "ふんっっｌ"},
-      {"ふんっっlt", "ふんっっｌｔ"},
-      {"ふむl", "ふむｌ"},
-      {"ふむっlt", "ふむっｌｔ"},
-      {"ほうlt", "ほうｌｔ"},
-      {"ほうっlt", "ほうっｌｔ"},
+      {"ふん", "l", "ふんｌ"},
+      {"ふん", "lt", "ふんｌｔ"},
+      {"ふんっ", "l", "ふんっｌ"},
+      {"ふんっ", "lt", "ふんっｌｔ"},
+      {"ふんっっ", "l", "ふんっっｌ"},
+      {"ふんっっ", "lt", "ふんっっｌｔ"},
+      {"ふむ", "l", "ふむｌ"},
+      {"ふむっ", "lt", "ふむっｌｔ"},
+      {"ほう", "lt", "ほうｌｔ"},
+      {"ほうっ", "lt", "ほうっｌｔ"},
   };
 
   for (const TestCase& test_case : kTestCases) {
@@ -2280,11 +2164,25 @@ TEST_F(SessionTest,
     config.set_live_conversion_delay_msec(0);
     session.SetConfig(config);
 
-    EXPECT_CALL(*converter, StartConversion(_, _)).Times(0);
+    // A completed kana prefix may now reach the converter.  The pending roman
+    // suffix itself must still stay in composition and must not start another
+    // live conversion.
+    EXPECT_CALL(*converter, StartConversion(_, _))
+        .Times(::testing::AnyNumber())
+        .WillRepeatedly(Return(false));
 
     commands::Command command;
-    const std::string dummy_key_codes(Util::CharsLen(test_case.key), 'a');
-    InsertCharacterString(test_case.key, dummy_key_codes, &session, &command);
+    const std::string prefix_key_codes(
+        Util::CharsLen(test_case.kana_prefix), 'a');
+    InsertCharacterString(test_case.kana_prefix, prefix_key_codes,
+                          &session, &command);
+
+    Mock::VerifyAndClearExpectations(converter.get());
+
+    EXPECT_CALL(*converter, StartConversion(_, _)).Times(0);
+
+    command.Clear();
+    InsertCharacterChars(test_case.roman_suffix, &session, &command);
 
     EXPECT_EQ(session.context().state(), ImeContext::COMPOSITION);
     EXPECT_FALSE(command.output().live_conversion());
