@@ -131,6 +131,21 @@
     </message>
     <message>
         <location filename="config_dialog.ui" line="0"/>
+        <source>ライブ変換を開始する最小文字数です。1 にすると 1 文字目からライブ変換します。</source>
+        <translation>Minimum number of characters required before live conversion starts. Set to 1 to start live conversion from the first character.</translation>
+    </message>
+    <message>
+        <location filename="config_dialog.ui" line="0"/>
+        <source>ライブ変換開始の最小文字数</source>
+        <translation>Minimum number of characters to start live conversion</translation>
+    </message>
+    <message>
+        <location filename="config_dialog.ui" line="0"/>
+        <source>ライブ変換を開始する最小文字数です。短くすると変換開始は早くなりますが、1 文字の助詞などが漢字化されやすくなります。</source>
+        <translation>Minimum number of characters required before live conversion starts. Lower values start conversion earlier, but single-character particles may be converted to kanji more eagerly.</translation>
+    </message>
+    <message>
+        <location filename="config_dialog.ui" line="0"/>
         <source>Show ruby window during live conversion</source>
         <translation></translation>
     </message>

@@ -271,6 +271,21 @@
     </message>
     <message>
         <location filename="config_dialog.ui" line="0"/>
+        <source>ライブ変換を開始する最小文字数です。1 にすると 1 文字目からライブ変換します。</source>
+        <translation>ライブ変換を開始する最小文字数です。1 にすると 1 文字目からライブ変換します。</translation>
+    </message>
+    <message>
+        <location filename="config_dialog.ui" line="0"/>
+        <source>ライブ変換開始の最小文字数</source>
+        <translation>ライブ変換開始の最小文字数</translation>
+    </message>
+    <message>
+        <location filename="config_dialog.ui" line="0"/>
+        <source>ライブ変換を開始する最小文字数です。短くすると変換開始は早くなりますが、1 文字の助詞などが漢字化されやすくなります。</source>
+        <translation>ライブ変換を開始する最小文字数です。短くすると変換開始は早くなりますが、1 文字の助詞などが漢字化されやすくなります。</translation>
+    </message>
+    <message>
+        <location filename="config_dialog.ui" line="0"/>
         <source>Show ruby window during live conversion</source>
         <translation>ライブ変換中にルビ表示を出す</translation>
     </message>
