@@ -323,6 +323,18 @@ ConfigDialog::ConfigDialog()
   zenzLiveCorrectionMinKeyLengthSpinBox->setSingleStep(1);
   zenzLiveCorrectionMinKeyLengthSpinBox->setSuffix(QString::fromUtf8(" 文字"));
 
+  zenzLiveCorrectionProfileLineEdit->setMaxLength(128);
+  zenzLiveCorrectionTopicLineEdit->setMaxLength(128);
+  zenzLiveCorrectionStyleLineEdit->setMaxLength(128);
+  zenzLiveCorrectionSettingsLineEdit->setMaxLength(128);
+
+  zenzLiveCorrectionRightContextLengthSpinBox->setRange(0, 128);
+  zenzLiveCorrectionRightContextLengthSpinBox->setSingleStep(1);
+  zenzLiveCorrectionRightContextLengthSpinBox->setSuffix(
+      QString::fromUtf8(" 文字"));
+  zenzLiveCorrectionRightContextLengthSpinBox->setSpecialValueText(
+      QString::fromUtf8("使わない"));
+
   punctuationsSettingComboBox->addItem(QString::fromUtf8("、。"));
   punctuationsSettingComboBox->addItem(QString::fromUtf8("，．"));
   punctuationsSettingComboBox->addItem(QString::fromUtf8("、．"));
@@ -432,6 +444,9 @@ ConfigDialog::ConfigDialog()
                    SLOT(SelectLiveConversionSetting(int)));
   QObject::connect(zenzLiveCorrectionCheckBox, SIGNAL(stateChanged(int)), this,
                    SLOT(SelectZenzLiveCorrectionSetting(int)));
+  QObject::connect(zenzLiveCorrectionRightContextCheckBox,
+                   SIGNAL(stateChanged(int)), this,
+                   SLOT(SelectZenzRightContextSetting(int)));
   QObject::connect(useAutoConversion, SIGNAL(stateChanged(int)), this,
                    SLOT(SelectAutoConversionSetting(int)));
   QObject::connect(useDirectCommit, SIGNAL(stateChanged(int)), this,
@@ -760,6 +775,8 @@ constexpr uint32_t kMaxZenzLiveCorrectionDelayMsec = 5000;
 constexpr uint32_t kDefaultZenzLiveCorrectionMinKeyLength = 2;
 constexpr uint32_t kMinZenzLiveCorrectionMinKeyLength = 2;
 constexpr uint32_t kMaxZenzLiveCorrectionMinKeyLength = 20;
+constexpr uint32_t kDefaultZenzLiveCorrectionRightContextLength = 10;
+constexpr uint32_t kMaxZenzLiveCorrectionRightContextLength = 128;
 
 constexpr uint32_t kDefaultInputPreeditTextColor = 0xff5000;
 constexpr uint32_t kDefaultInputPreeditBackgroundColor = 0xffffcc;
@@ -1466,6 +1483,30 @@ void ConfigDialog::ConvertFromProto(const config::Config &config) {
                      kMinZenzLiveCorrectionMinKeyLength,
                      kMaxZenzLiveCorrectionMinKeyLength)));
 
+  zenzLiveCorrectionProfileLineEdit->setText(
+      ToQString(config.zenz_live_correction_profile()));
+  zenzLiveCorrectionTopicLineEdit->setText(
+      ToQString(config.zenz_live_correction_topic()));
+  zenzLiveCorrectionStyleLineEdit->setText(
+      ToQString(config.zenz_live_correction_style()));
+  zenzLiveCorrectionSettingsLineEdit->setText(
+      ToQString(config.zenz_live_correction_settings()));
+
+  SET_CHECKBOX(zenzLiveCorrectionRightContextCheckBox,
+               use_zenz_live_correction_right_context);
+  const uint32_t zenz_live_correction_right_context_length =
+      config.has_zenz_live_correction_right_context_length()
+          ? config.zenz_live_correction_right_context_length()
+          : kDefaultZenzLiveCorrectionRightContextLength;
+  zenzLiveCorrectionRightContextLengthSpinBox->setValue(
+      static_cast<int>(
+          std::clamp(zenz_live_correction_right_context_length,
+                     0u,
+                     kMaxZenzLiveCorrectionRightContextLength)));
+
+  SelectZenzLiveCorrectionSetting(
+      static_cast<int>(zenzLiveCorrectionCheckBox->isChecked()));
+
   SET_CHECKBOX(zenzFeedbackLearningCheckBox, use_zenz_feedback_learning);
 
   SET_CHECKBOX(useAutoConversion, use_auto_conversion);
@@ -1638,6 +1679,19 @@ void ConfigDialog::ConvertToProto(config::Config *config) const {
   config->set_zenz_live_correction_min_key_length(
       static_cast<uint32_t>(
           zenzLiveCorrectionMinKeyLengthSpinBox->value()));
+  config->set_zenz_live_correction_profile(
+      zenzLiveCorrectionProfileLineEdit->text().toUtf8().constData());
+  config->set_zenz_live_correction_topic(
+      zenzLiveCorrectionTopicLineEdit->text().toUtf8().constData());
+  config->set_zenz_live_correction_style(
+      zenzLiveCorrectionStyleLineEdit->text().toUtf8().constData());
+  config->set_zenz_live_correction_settings(
+      zenzLiveCorrectionSettingsLineEdit->text().toUtf8().constData());
+  GET_CHECKBOX(zenzLiveCorrectionRightContextCheckBox,
+               use_zenz_live_correction_right_context);
+  config->set_zenz_live_correction_right_context_length(
+      static_cast<uint32_t>(
+          zenzLiveCorrectionRightContextLengthSpinBox->value()));
 
   GET_CHECKBOX(zenzFeedbackLearningCheckBox, use_zenz_feedback_learning);
 
@@ -1931,7 +1985,29 @@ void ConfigDialog::SelectZenzLiveCorrectionSetting(int state) {
   zenzLiveCorrectionDelaySpinBox->setEnabled(enabled);
   zenzLiveCorrectionMinKeyLengthLabel->setEnabled(enabled);
   zenzLiveCorrectionMinKeyLengthSpinBox->setEnabled(enabled);
+  zenzLiveCorrectionProfileLabel->setEnabled(enabled);
+  zenzLiveCorrectionProfileLineEdit->setEnabled(enabled);
+  zenzLiveCorrectionTopicLabel->setEnabled(enabled);
+  zenzLiveCorrectionTopicLineEdit->setEnabled(enabled);
+  zenzLiveCorrectionStyleLabel->setEnabled(enabled);
+  zenzLiveCorrectionStyleLineEdit->setEnabled(enabled);
+  zenzLiveCorrectionSettingsLabel->setEnabled(enabled);
+  zenzLiveCorrectionSettingsLineEdit->setEnabled(enabled);
+  zenzLiveCorrectionRightContextCheckBox->setEnabled(enabled);
+  SelectZenzRightContextSetting(
+      enabled ? static_cast<int>(
+                    zenzLiveCorrectionRightContextCheckBox->isChecked())
+              : 0);
   zenzFeedbackLearningCheckBox->setEnabled(enabled);
+}
+
+void ConfigDialog::SelectZenzRightContextSetting(int state) {
+  const bool enabled = liveConversionCheckBox->isChecked() &&
+                       zenzLiveCorrectionCheckBox->isChecked() &&
+                       static_cast<bool>(state);
+
+  zenzLiveCorrectionRightContextLengthLabel->setEnabled(enabled);
+  zenzLiveCorrectionRightContextLengthSpinBox->setEnabled(enabled);
 }
 
 void ConfigDialog::SelectAutoConversionSetting(int state) {

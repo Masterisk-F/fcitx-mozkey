@@ -358,6 +358,21 @@ message Config {
   // Raw left context is not stored.
   optional bool use_zenz_feedback_learning = 1011 [default = false];
 
+  // Zenzai v3/v3.2 condition fields. Empty values are omitted from the prompt.
+  // These are not chat prompts; they are mapped to zenz special-token fields:
+  // U+EE03 profile, U+EE04 topic, U+EE05 style, U+EE06 settings.
+  optional string zenz_live_correction_profile = 1012 [default = ""];
+  optional string zenz_live_correction_topic = 1013 [default = ""];
+  optional string zenz_live_correction_style = 1014 [default = ""];
+  optional string zenz_live_correction_settings = 1015 [default = ""];
+
+  // Zenzai v3.2 right-context support. The actual text is taken from
+  // commands::Context::following_text when the client supplies it.
+  optional bool use_zenz_live_correction_right_context = 1016
+      [default = true];
+  optional uint32 zenz_live_correction_right_context_length = 1017
+      [default = 24];
+
   //////////////////////////////////////////////////////////////
   //
   // Dictionary (80-99)

@@ -28,6 +28,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "session/session.h"
+#include "session/zenz_prompt_builder.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -541,6 +542,79 @@ void SetCustomKeymapForSession(absl::string_view custom_keymap_table,
 
 }  // namespace
 
+TEST(ZenzPromptBuilderTest, ExistingBuildFormatIsPreserved) {
+  const ZenzPromptBuilder builder;
+
+  const std::string left_context =
+      "\xE4\xBB\x8A\xE6\x97\xA5\xE3\x81\xAF";  // Today + particle.
+  const std::string reading = "\xE3\x81\xA6\xE3\x82\x93\xE3\x81\x8D";
+  const std::string katakana = "\xE3\x83\x86\xE3\x83\xB3\xE3\x82\xAD";
+
+  EXPECT_EQ(std::string("\xEE\xB8\x82") + left_context +
+                std::string("\xEE\xB8\x80") + katakana +
+                std::string("\xEE\xB8\x81"),
+            builder.Build(left_context, reading));
+}
+
+TEST(ZenzPromptBuilderTest, BuildsV32ConditionFieldsAsciiOnly) {
+  ZenzPromptOptions options;
+  options.left_context = "left";
+  options.right_context = "right";
+  options.profile = "profile";
+  options.topic = "topic";
+  options.style = "style";
+  options.settings = "settings";
+
+  const ZenzPromptBuilder builder;
+  const std::string reading =
+      "\xE3\x81\x93\xE3\x81\x86\xE3\x81\x9B\xE3\x81\x84";
+  const std::string katakana =
+      "\xE3\x82\xB3\xE3\x82\xA6\xE3\x82\xBB\xE3\x82\xA4";
+
+  EXPECT_EQ(std::string("\xEE\xB8\x82") + "left" +
+                std::string("\xEE\xB8\x87") + "right" +
+                std::string("\xEE\xB8\x83") + "profile" +
+                std::string("\xEE\xB8\x84") + "topic" +
+                std::string("\xEE\xB8\x85") + "style" +
+                std::string("\xEE\xB8\x86") + "settings" +
+                std::string("\xEE\xB8\x80") + katakana +
+                std::string("\xEE\xB8\x81"),
+            builder.Build(reading, options));
+}
+
+TEST(ZenzPromptBuilderTest, OmitsEmptyConditionFields) {
+  ZenzPromptOptions options;
+  options.left_context = "left";
+  options.settings = "settings";
+
+  const ZenzPromptBuilder builder;
+  const std::string reading = "\xE3\x81\xA6\xE3\x81\x99\xE3\x81\xA8";
+  const std::string katakana = "\xE3\x83\x86\xE3\x82\xB9\xE3\x83\x88";
+
+  EXPECT_EQ(std::string("\xEE\xB8\x82") + "left" +
+                std::string("\xEE\xB8\x86") + "settings" +
+                std::string("\xEE\xB8\x80") + katakana +
+                std::string("\xEE\xB8\x81"),
+            builder.Build(reading, options));
+}
+
+TEST(ZenzPromptBuilderTest, SanitizesConditionFields) {
+  ZenzPromptOptions options;
+  options.left_context = std::string("left") + "\xEE\xB8\x80" + "\n";
+  options.profile = std::string("profile") + "\xEE\xB8\x81" + "\t";
+  options.topic = std::string(65, 'a');
+
+  const ZenzPromptBuilder builder;
+  const std::string reading = "\xE3\x81\xA6\xE3\x81\x99\xE3\x81\xA8";
+  const std::string katakana = "\xE3\x83\x86\xE3\x82\xB9\xE3\x83\x88";
+
+  EXPECT_EQ(std::string("\xEE\xB8\x82") + "left " +
+                std::string("\xEE\xB8\x83") + "profile " +
+                std::string("\xEE\xB8\x84") + std::string(64, 'a') +
+                std::string("\xEE\xB8\x80") + katakana +
+                std::string("\xEE\xB8\x81"),
+            builder.Build(reading, options));
+}
 class SessionTest : public testing::TestWithTempUserProfile {
  protected:
   void SetUp() override {
