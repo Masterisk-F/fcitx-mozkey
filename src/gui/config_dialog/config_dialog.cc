@@ -314,6 +314,10 @@ ConfigDialog::ConfigDialog()
   liveConversionDelaySpinBox->setSuffix(QString::fromUtf8(" ms"));
   liveConversionDelaySpinBox->setSpecialValueText(QString::fromUtf8("即時"));
 
+  liveConversionMinKeyLengthSpinBox->setRange(1, 20);
+  liveConversionMinKeyLengthSpinBox->setSingleStep(1);
+  liveConversionMinKeyLengthSpinBox->setSuffix(QString::fromUtf8(" 文字"));
+
   zenzLiveCorrectionDelaySpinBox->setRange(0, 5000);
   zenzLiveCorrectionDelaySpinBox->setSingleStep(100);
   zenzLiveCorrectionDelaySpinBox->setSuffix(QString::fromUtf8(" ms"));
@@ -770,6 +774,9 @@ static constexpr int kPreeditMethodSize = 2;
 
 constexpr uint32_t kDefaultLiveConversionDelayMsec = 228;
 constexpr uint32_t kMaxLiveConversionDelayMsec = 1000;
+constexpr uint32_t kDefaultLiveConversionMinKeyLength = 2;
+constexpr uint32_t kMinLiveConversionMinKeyLength = 1;
+constexpr uint32_t kMaxLiveConversionMinKeyLength = 20;
 constexpr uint32_t kDefaultZenzLiveCorrectionDelayMsec = 1000;
 constexpr uint32_t kMaxZenzLiveCorrectionDelayMsec = 5000;
 constexpr uint32_t kDefaultZenzLiveCorrectionMinKeyLength = 2;
@@ -1458,6 +1465,16 @@ void ConfigDialog::ConvertFromProto(const config::Config &config) {
                      0u,
                      kMaxLiveConversionDelayMsec)));
 
+  const uint32_t live_conversion_min_key_length =
+      config.has_live_conversion_min_key_length()
+          ? config.live_conversion_min_key_length()
+          : kDefaultLiveConversionMinKeyLength;
+  liveConversionMinKeyLengthSpinBox->setValue(
+      static_cast<int>(
+          std::clamp(live_conversion_min_key_length,
+                     kMinLiveConversionMinKeyLength,
+                     kMaxLiveConversionMinKeyLength)));
+
   SET_CHECKBOX(showLiveConversionRubyWindow,
                show_live_conversion_ruby_window);
 
@@ -1670,6 +1687,8 @@ void ConfigDialog::ConvertToProto(config::Config *config) const {
   GET_CHECKBOX(liveConversionCheckBox, use_live_conversion);
   config->set_live_conversion_delay_msec(
       static_cast<uint32_t>(liveConversionDelaySpinBox->value()));
+  config->set_live_conversion_min_key_length(
+      static_cast<uint32_t>(liveConversionMinKeyLengthSpinBox->value()));
   GET_CHECKBOX(showLiveConversionRubyWindow,
                show_live_conversion_ruby_window);
 
@@ -1970,6 +1989,8 @@ void ConfigDialog::SelectLiveConversionSetting(int state) {
 
   liveConversionDelayLabel->setEnabled(enabled);
   liveConversionDelaySpinBox->setEnabled(enabled);
+  liveConversionMinKeyLengthLabel->setEnabled(enabled);
+  liveConversionMinKeyLengthSpinBox->setEnabled(enabled);
   showLiveConversionRubyWindow->setEnabled(enabled);
 
   zenzLiveCorrectionCheckBox->setEnabled(enabled);

@@ -141,6 +141,7 @@ TEST_F(ConfigHandlerTest, NormalizeMozkeyInputDefaults) {
   const Config output = ConfigHandler::GetCopiedConfig();
 
   EXPECT_TRUE(output.use_live_conversion());
+  EXPECT_EQ(output.live_conversion_min_key_length(), 2);
   EXPECT_TRUE(output.use_direct_commit());
   EXPECT_EQ(
       output.direct_commit_key(),
@@ -284,6 +285,7 @@ TEST_F(ConfigHandlerTest, GetDefaultConfig) {
   EXPECT_EQ(output.session_keymap(), Config::MSIME);
 #endif  // __APPLE__ || OS_CHROMEOS
 
+  EXPECT_EQ(output.live_conversion_min_key_length(), 2);
   EXPECT_EQ(output.character_form_rules_size(), 13);
 
   struct TestCase {

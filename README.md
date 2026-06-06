@@ -65,9 +65,9 @@ Windows 用のビルド済み MSI は [Releases](https://github.com/koyasi777/mo
 - 変換確定直後に Backspace や Cancel キーで取り消した場合のユーザー履歴学習の扱いを改善
 - 句読点・記号の単打確定でも、直前の通常変換確定による学習を次の実テキスト入力まで保留し、Backspace / Escape / Revert / Reset / Undo / IME off などで取り消せるようにした
 - ライブ変換機能を追加。未確定文字列を自動変換し、確定前の読みをルビ風 overlay で表示
-- ライブ変換は設定画面から ON/OFF と変換開始までの遅延時間を変更可能
+- ライブ変換は設定画面から ON/OFF、変換開始までの遅延時間、変換開始の最小文字数を変更可能
 - ライブ変換は入力直後の不要な変換ちらつきを抑えるため、文字入力後に短いデバウンスを挟んで実行
-- 1文字だけの未確定文字列では、助詞などの誤変換を避けるためライブ変換を実行しない
+- デフォルトでは 1 文字だけの未確定文字列で、助詞などの誤変換を避けるためライブ変換を実行しない
 - `え~`、`えー`、`ん？` のような「かな1文字 + 装飾的な末尾記号」でも、短すぎる漢字化を避けるためライブ変換を抑制
 - 感嘆詞・口語評価語・くだけた挨拶の入力途中ではライブ変換のちらつきを抑えつつ、完成した `うっそ`、`くっそ`、`やっば`、`すっげぇ`、`めっちゃ`、`ちっす`、`ちょりっす`、`ほえ～`、`ほぇ～`、`ほっほーん` などは生成辞書候補として自然なかな表記を救出
 - 確定済みの左文脈や直前の文節、限定的な右文脈を参照し、`mainにマージしました`、`githubには`、`2名しかいない`、`追記したい`、`山梨県立美術館`、`滋賀方面` のような文脈で、助詞・複合機能語・機能表現・接尾的な語構成・地名接尾構成が同音漢字候補に負ける挙動を抑制
@@ -92,8 +92,8 @@ Windows 用のビルド済み MSI は [Releases](https://github.com/koyasi777/mo
 - `にじ` のような 2 文字ひらがな入力で、`に|じ` のような短すぎる文節分割が全体候補を隠す挙動を抑制
 - llama.cpp ベースのローカル Zenz live correction pipeline を追加
 - Zenz 補正は `mozc_server` から named pipe 経由で `mozc_zenz_scorer.exe` に依頼し、`llama-server.exe` の localhost endpoint でローカル推論
-- Zenz 推論開始までの遅延時間を設定画面から変更可能。デフォルトは 1000 ms
-- Zenz 推論を許可する最小読み長を設定画面から変更可能
+- Zenz 補正開始までの遅延時間を設定画面から変更可能。デフォルトは 1000 ms
+- Zenz 補正開始の最小文字数を設定画面から変更可能
 - Zenz 補正結果のローカル feedback learning を追加。設定画面から ON/OFF 可能
 - Zenz feedback は、Zenz 補正結果が表示されただけでは保存されません。Enter や句読点・記号の単打確定などで表示中の Zenz 結果が明示的に確定された場合だけ、accepted feedback の候補として保留されます。
 - 保留された accepted feedback は、次の実テキスト入力まで Backspace / Escape / Revert / Undo / IME off などで取り消されなかった場合にローカル TSV へ保存
@@ -172,7 +172,7 @@ Windows 版では、追加のオフライン防御層として、インストー
 
 ライブ変換を有効にすると、スペースキーを押さなくても、入力中の未確定文字列が自動で変換されます。
 
-入力途中の不要な中間変換表示を抑えるため、この fork では文字入力後に短い設定可能なデバウンス時間を挟んでからライブ変換を実行します。`に`、`を`、`が` のような助詞として使われやすい入力を誤って漢字化しないように、1文字だけの未確定文字列ではライブ変換を行いません。
+入力途中の不要な中間変換表示を抑えるため、この fork では文字入力後に短い設定可能なデバウンス時間を挟んでからライブ変換を実行します。`に`、`を`、`が` のような助詞として使われやすい入力を誤って漢字化しないように、デフォルトでは 1 文字だけの未確定文字列ではライブ変換を行いません。ライブ変換を開始する最小文字数は設定画面から変更できます。
 
 また、`え~`、`えー`、`ん？` のように、かな1文字の後ろに装飾的な記号だけが続く場合もライブ変換を抑制します。これにより、入力途中の `え~` が `絵～` のように短すぎる漢字候補へ変換される挙動を避けます。
 
@@ -202,7 +202,7 @@ Windows 版では、追加のオフライン防御層として、インストー
 
 ライブ変換中は、変換後の文字を表示しながら元の読みも分かるように、未確定文字の上付近に Mozc 独自のルビ風 overlay window を表示します。
 
-ライブ変換は設定画面から ON/OFF を切り替えられます。また、変換開始までの遅延時間も設定画面から変更できます。
+ライブ変換は設定画面から ON/OFF を切り替えられます。また、変換開始までの遅延時間と、ライブ変換を開始する最小文字数も設定画面から変更できます。
 
 ### Zenz ライブ補正
 
@@ -210,7 +210,7 @@ Windows 版では、追加のオフライン防御層として、インストー
 
 Zenz request は `mozc_server` から Windows named pipe 経由で `mozc_zenz_scorer.exe` に送られます。scorer は同梱された `llama-server.exe` の localhost endpoint を呼び出し、ローカル推論を行います。この localhost 通信は固定 endpoint に依存しないようにし、内部 request も誤接続を避けるための保護を加えています。
 
-Zenz 補正は設定可能なデバウンス時間の後に実行されます。デフォルトは 1000 ms です。Zenz 結果が返る前に入力内容が変わった場合、古い結果は generation / key の検査により破棄されます。
+Zenz 補正は設定可能なデバウンス時間の後に実行されます。デフォルトは 1000 ms です。また、Zenz 補正を開始する最小文字数も設定画面から変更できます。Zenz 結果が返る前に入力内容が変わった場合、古い結果は generation / key の検査により破棄されます。
 
 Zenz 出力は表示前に検証されます。空出力、短すぎる入力、Mozc 結果と同一の出力、長すぎる出力、不正な文字列、安全でない可能性のある文字列は拒否されます。拒否された場合は、通常の Mozc ライブ変換結果をそのまま表示します。
 
@@ -533,9 +533,9 @@ Main features added in this fork
 - Improves user-history learning behavior when a committed conversion is immediately corrected with Backspace or Cancel
 - Keeps learning caused by direct-commit punctuations/symbols pending until the next real text input, and allows it to be reverted by Backspace, Escape, Revert, Reset, Undo, or IME off
 - Adds live conversion that automatically converts the current composition and shows a ruby-like overlay for the original reading
-- Allows enabling/disabling live conversion and configuring its debounce delay from the config dialog
+- Allows enabling/disabling live conversion and configuring its debounce delay and minimum start length from the config dialog
 - Applies live conversion after a short debounce delay to avoid noisy intermediate conversions
-- Suppresses live conversion for one-character compositions to avoid over-converting particles
+- By default, suppresses live conversion for one-character compositions to avoid over-converting particles
 - Suppresses live conversion for very short kana compositions with decorative trailing symbols such as `え~`, `えー`, or `ん？`
 - Suppresses live-conversion flicker for unfinished expressive kana prefixes, while completed expressive forms such as `うっそ`, `くっそ`, `やっば`, `すっげぇ`, `めっちゃ`, `ちっす`, `ちょりっす`, `ほえ～`, `ほぇ～`, and `ほっほーん` are rescued as generated dictionary candidates
 - Uses committed left context, previous segments, and limited right context to reduce unnatural homophone results in cases such as `mainにマージしました`, `githubには`, `2名しかいない`, `追記したい`, `山梨県立美術館`, and `滋賀方面`
@@ -560,8 +560,8 @@ Main features added in this fork
 - Reduces cases where short two-character hiragana inputs such as `にじ` are split too aggressively
 - Adds a local Zenz live correction pipeline based on llama.cpp
 - Sends Zenz correction requests from `mozc_server` to `mozc_zenz_scorer.exe` through a named pipe, and performs local inference through the localhost endpoint of `llama-server.exe`
-- Allows configuring the Zenz inference debounce delay from the config dialog. The default is 1000 ms
-- Allows configuring the minimum reading length for Zenz inference
+- Allows configuring the Zenz correction debounce delay from the config dialog. The default is 1000 ms
+- Allows configuring the minimum number of characters to start Zenz correction
 - Adds optional local feedback learning for Zenz correction results
 - Does not store Zenz feedback just because a Zenz correction was displayed. A visible Zenz result becomes pending accepted feedback only when the user explicitly commits it, such as with Enter or a direct-commit punctuation/symbol
 - Writes pending accepted feedback to the local TSV only if it is not canceled by Backspace, Escape, Revert, Undo, IME off, or similar correction actions before the next real text input
@@ -606,7 +606,7 @@ while valid longer rules such as `ctnnr` and `ctnnc` still work.
 
 With live conversion enabled, Mozc automatically converts the current composition without committing it immediately.
 
-To reduce distracting intermediate conversions, this fork applies live conversion after a short configurable debounce delay instead of converting every character immediately. Single-character compositions are not live-converted, because they are often particles such as `に`, `を`, or `が`.
+To reduce distracting intermediate conversions, this fork applies live conversion after a short configurable debounce delay instead of converting every character immediately. By default, single-character compositions are not live-converted, because they are often particles such as `に`, `を`, or `が`. The minimum number of characters required to start live conversion can be changed from the config dialog.
 
 Live conversion is also suppressed for very short kana compositions followed only by decorative trailing symbols, such as `え~`, `えー`, or `ん？`. This avoids noisy intermediate conversions such as `え~` becoming `絵～` while the user is still typing.
 
@@ -628,7 +628,7 @@ For example:
 
 During live conversion, this fork shows a small ruby-like overlay window above the preedit text so that the original reading remains visible while the converted text is shown.
 
-The live conversion feature can be enabled or disabled from the config dialog. The debounce delay can also be configured there.
+The live conversion feature can be enabled or disabled from the config dialog. The debounce delay and the minimum number of characters required to start live conversion can also be configured there.
 
 ### Zenz live correction
 
@@ -643,8 +643,9 @@ that it does not rely on a fixed endpoint, and internal requests include
 protection against accidental or stale local endpoint mismatches.
 
 Zenz correction is delayed by a configurable debounce interval. The default
-delay is 1000 ms. If the current composition changes before the Zenz result
-arrives, the old result is discarded by generation/key checks.
+delay is 1000 ms. The minimum number of characters required to start Zenz
+correction can also be configured. If the current composition changes before
+the Zenz result arrives, the old result is discarded by generation/key checks.
 
 Zenz output is validated before display. Outputs that are empty, too short,
 identical to the Mozc result, too long, malformed, or likely to contain unsafe

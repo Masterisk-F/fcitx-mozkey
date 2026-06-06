@@ -181,10 +181,13 @@ const size_t kMultipleUndoMaxSize = 10;
 constexpr uint32_t kDefaultLiveConversionDelayMillisec = 228;
 constexpr uint32_t kMaxLiveConversionDelayMillisec = 1000;
 
-// Do not run live conversion for a single-character composition.
+// Default minimum composition length before live conversion is allowed.
 // Single-character input is often a particle such as 「に」「を」「が」,
 // and converting it to a kanji such as 「二」 too eagerly is noisy.
-constexpr size_t kMinLiveConversionCompositionLength = 2;
+// The value is user-configurable via Config::live_conversion_min_key_length.
+constexpr uint32_t kDefaultLiveConversionMinKeyLength = 2;
+constexpr uint32_t kMinLiveConversionMinKeyLength = 1;
+constexpr uint32_t kMaxLiveConversionMinKeyLength = 20;
 
 constexpr uint32_t kDefaultZenzLiveCorrectionDelayMsec = 1000;
 constexpr uint32_t kDefaultZenzLiveCorrectionTimeoutMsec = 180;
@@ -1374,8 +1377,9 @@ bool ShouldSkipLiveConversionForPendingRomanSuffixAfterExpressiveKana(
 
 bool ShouldSkipLiveConversionForCompositionKey(
     absl::string_view key,
-    LiveConversionLeftBoundary committed_left_boundary) {
-  if (Util::CharsLen(key) < kMinLiveConversionCompositionLength) {
+    LiveConversionLeftBoundary committed_left_boundary,
+    size_t min_key_length) {
+  if (Util::CharsLen(key) < min_key_length) {
     return true;
   }
 
@@ -1427,7 +1431,7 @@ bool ShouldSkipLiveConversionForCompositionKey(
 
   // "え~", "へー", "ん？" should stay as kana while typing.
   // But longer readings such as "きょう~" may still be live-converted.
-  if (Util::CharsLen(core) >= kMinLiveConversionCompositionLength) {
+  if (Util::CharsLen(core) >= min_key_length) {
     return false;
   }
 
@@ -1440,6 +1444,16 @@ uint32_t GetLiveConversionDelayMillisec(const config::Config& config) {
   }
   return std::min(config.live_conversion_delay_msec(),
                   kMaxLiveConversionDelayMillisec);
+}
+
+size_t GetLiveConversionMinKeyLength(const config::Config& config) {
+  const uint32_t value = config.has_live_conversion_min_key_length()
+                             ? config.live_conversion_min_key_length()
+                             : kDefaultLiveConversionMinKeyLength;
+  return static_cast<size_t>(
+      std::clamp(value,
+                 kMinLiveConversionMinKeyLength,
+                 kMaxLiveConversionMinKeyLength));
 }
 
 uint32_t GetZenzLiveCorrectionDelayMsec(const config::Config& config) {
@@ -4050,7 +4064,8 @@ bool Session::MaybeStartLiveConversion(commands::Command* command) {
 
   if (ShouldSkipLiveConversionForCompositionKey(
           live_conversion_key,
-          GetLiveConversionCommittedLeftBoundary(*context_)) ||
+          GetLiveConversionCommittedLeftBoundary(*context_),
+          GetLiveConversionMinKeyLength(context_->GetConfig())) ||
       length != context_->composer().GetCursor()) {
     return false;
   }
@@ -4226,7 +4241,9 @@ bool Session::MaybeScheduleLiveConversion(commands::Command* command) {
   const std::string key = context_->composer().GetQueryForConversion();
 
   if (ShouldSkipLiveConversionForCompositionKey(
-          key, GetLiveConversionCommittedLeftBoundary(*context_)) ||
+          key,
+          GetLiveConversionCommittedLeftBoundary(*context_),
+          GetLiveConversionMinKeyLength(context_->GetConfig())) ||
       length != context_->composer().GetCursor()) {
     CancelPendingLiveConversion();
     return false;
@@ -4318,7 +4335,8 @@ bool Session::ApplyDelayedLiveConversion(commands::Command* command) {
   const size_t length = context_->composer().GetLength();
   if (ShouldSkipLiveConversionForCompositionKey(
           current_key,
-          GetLiveConversionCommittedLeftBoundary(*context_)) ||
+          GetLiveConversionCommittedLeftBoundary(*context_),
+          GetLiveConversionMinKeyLength(context_->GetConfig())) ||
       length != context_->composer().GetCursor()) {
     CancelPendingLiveConversion();
     OutputFromState(command);
@@ -4342,7 +4360,8 @@ bool Session::FlushPendingLiveConversion() {
   if (current_key != pending_live_conversion_key_ ||
       ShouldSkipLiveConversionForCompositionKey(
           current_key,
-          GetLiveConversionCommittedLeftBoundary(*context_))) {
+          GetLiveConversionCommittedLeftBoundary(*context_),
+          GetLiveConversionMinKeyLength(context_->GetConfig()))) {
     CancelPendingLiveConversion();
     return false;
   }
