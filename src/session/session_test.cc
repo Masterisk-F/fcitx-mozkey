@@ -1602,6 +1602,103 @@ TEST_F(SessionTest, LiveConversionAllowsSingleCharacterWhenMinKeyLengthIsOne) {
   EXPECT_TRUE(EnsurePreedit("亜", command));
 }
 
+TEST_F(SessionTest,
+       ZenzLiveCorrectionPositiveDelaySchedulesStartCallback) {
+  MockEngine engine;
+  std::shared_ptr<MockConverter> converter = CreateEngineConverterMock(&engine);
+
+  Session session(engine);
+  InitSessionToPrecomposition(&session);
+
+  config::Config config;
+  config::ConfigHandler::GetDefaultConfig(&config);
+  config.set_use_live_conversion(true);
+  config.set_live_conversion_delay_msec(0);
+  config.set_live_conversion_min_key_length(2);
+  config.set_use_zenz_live_correction(true);
+  config.set_zenz_live_correction_delay_msec(1);
+  config.set_zenz_live_correction_min_key_length(2);
+  session.SetConfig(config);
+
+  Segments segments;
+  Segment* segment = segments.add_segment();
+  segment->set_key("あい");
+  converter::Candidate* candidate = segment->add_candidate();
+  candidate->key = "あい";
+  candidate->content_key = "あい";
+  candidate->value = "愛";
+
+  EXPECT_CALL(*converter, StartConversion(_, _))
+      .Times(1)
+      .WillOnce(DoAll(SetArgPointee<1>(segments), Return(true)));
+
+  commands::Command command;
+  InsertCharacterString("あい", "ai", &session, &command);
+
+  EXPECT_EQ(session.context().state(), ImeContext::CONVERSION);
+  EXPECT_TRUE(command.output().live_conversion());
+  EXPECT_FALSE(command.output().live_conversion_pending());
+  EXPECT_TRUE(command.output().zenz_live_correction_pending());
+  EXPECT_TRUE(EnsurePreedit("愛", command));
+
+  ASSERT_TRUE(command.output().has_callback());
+  ASSERT_TRUE(command.output().callback().has_session_command());
+  EXPECT_EQ(command.output().callback().session_command().type(),
+            commands::SessionCommand::APPLY_ZENZ_LIVE_CORRECTION);
+  ASSERT_TRUE(command.output().callback().has_delay_millisec());
+  EXPECT_EQ(command.output().callback().delay_millisec(), 1);
+}
+
+TEST_F(SessionTest,
+       ZenzLiveCorrectionZeroDelayStartsImmediatelyAndKeepsLiveOutput) {
+  MockEngine engine;
+  std::shared_ptr<MockConverter> converter = CreateEngineConverterMock(&engine);
+
+  Session session(engine);
+  InitSessionToPrecomposition(&session);
+
+  config::Config config;
+  config::ConfigHandler::GetDefaultConfig(&config);
+  config.set_use_live_conversion(true);
+  config.set_live_conversion_delay_msec(0);
+  config.set_live_conversion_min_key_length(2);
+  config.set_use_zenz_live_correction(true);
+  config.set_zenz_live_correction_delay_msec(0);
+  config.set_zenz_live_correction_min_key_length(2);
+  config.set_zenz_live_correction_pipe_name("");
+  session.SetConfig(config);
+
+  Segments segments;
+  Segment* segment = segments.add_segment();
+  segment->set_key("あい");
+  converter::Candidate* candidate = segment->add_candidate();
+  candidate->key = "あい";
+  candidate->content_key = "あい";
+  candidate->value = "愛";
+
+  EXPECT_CALL(*converter, StartConversion(_, _))
+      .Times(1)
+      .WillOnce(DoAll(SetArgPointee<1>(segments), Return(true)));
+
+  commands::Command command;
+  InsertCharacterString("あい", "ai", &session, &command);
+
+  EXPECT_EQ(session.context().state(), ImeContext::CONVERSION);
+  EXPECT_TRUE(command.output().live_conversion());
+  EXPECT_FALSE(command.output().live_conversion_pending());
+  EXPECT_TRUE(command.output().zenz_live_correction_pending());
+  EXPECT_TRUE(EnsurePreedit("愛", command));
+
+  ASSERT_TRUE(command.output().has_callback());
+  ASSERT_TRUE(command.output().callback().has_session_command());
+  EXPECT_EQ(command.output().callback().session_command().type(),
+            commands::SessionCommand::APPLY_ZENZ_LIVE_CORRECTION);
+  ASSERT_TRUE(command.output().callback().has_delay_millisec());
+  // Zero-delay Zenz correction should not emit a rounded start callback.
+  // It starts the request immediately and emits the first poll callback.
+  EXPECT_EQ(command.output().callback().delay_millisec(), 24);
+}
+
 TEST_F(SessionTest, LiveConversionHonorsRaisedMinKeyLength) {
   MockEngine engine;
   std::shared_ptr<MockConverter> converter = CreateEngineConverterMock(&engine);

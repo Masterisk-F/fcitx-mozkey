@@ -5170,6 +5170,18 @@ bool Session::MaybeScheduleZenzLiveCorrection(commands::Command* command) {
       ZenzBool(right_context_result.allowed_for_prompt),
       " right_context_reason=", right_context_result.reason));
 
+  const uint32_t delay_msec = GetZenzLiveCorrectionDelayMsec(config);
+  if (delay_msec == 0) {
+    ZenzDebugOutput("[zenz] start immediately");
+    // The current command already contains the freshly generated live
+    // conversion output from MaybeStartLiveConversion().  Do not call
+    // Output() again in the same key-event path, because PopOutput() is
+    // destructive and a second output refresh can momentarily duplicate the
+    // composition text on some TSF clients.
+    return AdvancePendingZenzLiveCorrection(
+        command, /*refresh_output_on_submit=*/false);
+  }
+
   AttachZenzLiveCorrectionStartCallback(command);
   command->mutable_output()->set_zenz_live_correction_pending(true);
   return true;
@@ -5419,6 +5431,15 @@ bool Session::ApplyZenzLiveCorrection(commands::Command* command) {
     return IgnoreStaleDelayedLiveConversion(command);
   }
 
+  return AdvancePendingZenzLiveCorrection(
+      command, /*refresh_output_on_submit=*/true);
+}
+
+bool Session::AdvancePendingZenzLiveCorrection(
+    commands::Command* command,
+    const bool refresh_output_on_submit) {
+  command->mutable_output()->set_consumed(true);
+
   const config::Config& config = context_->GetConfig();
   const absl::Time now = Clock::GetAbslTime();
   const uint32_t timeout_msec = GetZenzLiveCorrectionTimeoutMsec(config);
@@ -5458,7 +5479,15 @@ bool Session::ApplyZenzLiveCorrection(commands::Command* command) {
 
     EnsureZenzLiveCorrector()->Submit(std::move(request));
 
-    const bool result = OutputCurrentLiveConversionWithZenzPending(command);
+    bool result = true;
+    if (refresh_output_on_submit) {
+      result = OutputCurrentLiveConversionWithZenzPending(command);
+    } else {
+      commands::Output* output = command->mutable_output();
+      output->set_live_conversion(true);
+      output->set_live_conversion_pending(false);
+      output->set_zenz_live_correction_pending(true);
+    }
     AttachZenzLiveCorrectionPollCallback(command);
     return result;
   }

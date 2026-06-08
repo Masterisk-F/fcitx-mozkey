@@ -486,6 +486,9 @@ class Session {
   void AttachZenzLiveCorrectionPollCallback(
       mozc::commands::Command* command) const;
   bool ApplyZenzLiveCorrection(mozc::commands::Command* command);
+  bool AdvancePendingZenzLiveCorrection(
+      mozc::commands::Command* command,
+      bool refresh_output_on_submit);
   bool IsCurrentZenzLiveCorrectionCallback(
       const mozc::commands::Command& command) const;
   bool OutputCurrentLiveConversionWithZenzPending(
