@@ -1,0 +1,5 @@
+#!/bin/sh
+
+_BUILD_TARGETS="${_BUILD_TARGETS:-unix/fcitx5:fcitx5-mozc.so server:mozc_server gui/tool:mozc_tool}"
+
+bazelisk build --config release_build --config oss_linux "$@" $_BUILD_TARGETS

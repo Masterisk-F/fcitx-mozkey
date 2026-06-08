@@ -1,0 +1,26 @@
+#!/bin/bash
+
+PREFIX="${PREFIX:-/usr}"
+
+# Build .mo files from .po files
+for pofile in src/unix/fcitx5/po/*.po
+do
+    filename=$(basename "$pofile")
+    lang=${filename/.po/}
+    mofile=${pofile/.po/.mo}
+    msgfmt "$pofile" -o "$mofile"
+    install -D -m 644 "$mofile" "${PREFIX}/share/locale/$lang/LC_MESSAGES/fcitx5-mozc.mo"
+    rm -f "$mofile"
+done
+
+# Install config files
+install -D -m 644 src/unix/fcitx5/mozc-addon.conf "${PREFIX}/share/fcitx5/addon/mozc.conf"
+install -D -m 644 src/unix/fcitx5/mozc.conf "${PREFIX}/share/fcitx5/inputmethod/mozc.conf"
+
+# Install icons
+PREFIX="${PREFIX}" bash scripts/install_fcitx5_icons
+
+# Generate and install metainfo
+msgfmt --xml -d src/unix/fcitx5/po/ --template src/unix/fcitx5/org.fcitx.Fcitx5.Addon.Mozc.metainfo.xml.in -o src/unix/fcitx5/org.fcitx.Fcitx5.Addon.Mozc.metainfo.xml
+install -Dm644 src/unix/fcitx5/org.fcitx.Fcitx5.Addon.Mozc.metainfo.xml "${PREFIX}/share/metainfo/org.fcitx.Fcitx5.Addon.Mozc.metainfo.xml"
+rm -f src/unix/fcitx5/org.fcitx.Fcitx5.Addon.Mozc.metainfo.xml

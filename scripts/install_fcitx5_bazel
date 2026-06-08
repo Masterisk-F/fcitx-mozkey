@@ -1,0 +1,8 @@
+#!/bin/sh
+PREFIX="${PREFIX:-/usr}"
+
+# Build output is in src/bazel-bin/
+install -D -m 755 "src/bazel-bin/unix/fcitx5/fcitx5-mozc.so" "${PREFIX}/lib/fcitx5/fcitx5-mozc.so"
+
+PREFIX="${PREFIX}" bash scripts/install_fcitx5_data
+PREFIX="${PREFIX}" bash scripts/install_fcitx5_icons

@@ -45,6 +45,8 @@ class Packager:
   def __init__(self, args):
     self.mozc_icons_dir = args.mozc_icons_dir
     self.ibus_icons_dir = args.ibus_mozc_install_dir
+    self.fcitx5_addon_dir = args.fcitx5_addon_dir
+    self.fcitx5_addon_data_dir = args.fcitx5_addon_data_dir
     self.location_rules = {
         'ibus_mozc': args.ibus_mozc_path,
         'icons.zip': '/tmp/icons.zip',
@@ -55,6 +57,7 @@ class Packager:
         'mozc_emacs_helper': os.path.join(args.emacs_helper_dir,
                                           'mozc_emacs_helper'),
         'mozc.el': os.path.join(args.emacs_client_dir, 'mozc.el'),
+        'fcitx5-mozc.so': os.path.join(args.fcitx5_addon_dir, 'fcitx5-mozc.so'),
     }
 
   def PackageFiles(self, inputs: List[str], output: str) -> None:
@@ -80,6 +83,41 @@ class Packager:
 
       if src.endswith('icons.zip'):
         self.LocateIconFiles(top_dir, src)
+      elif src.endswith('fcitx5-mozc.so'):
+        self.LocateFcitx5Files(top_dir, src)
+
+  def LocateFcitx5Files(self, top_dir: str, fcitx5_so: str) -> None:
+    """Locate fcitx5 addon files (config, metainfo, icons, translations)."""
+    # Config files
+    fcitx5_config_dir = self.JoinTopDir(top_dir, self.fcitx5_addon_data_dir)
+    inputmethod_dir = os.path.join(fcitx5_config_dir, 'inputmethod')
+    addon_dir = os.path.join(fcitx5_config_dir, 'addon')
+    metainfo_dir = os.path.join(fcitx5_config_dir, 'metainfo')
+    locale_dir = os.path.join(fcitx5_config_dir, 'locale')
+    icons_dir = os.path.join(fcitx5_config_dir, 'icons')
+
+    os.makedirs(inputmethod_dir, exist_ok=True)
+    os.makedirs(addon_dir, exist_ok=True)
+    os.makedirs(metainfo_dir, exist_ok=True)
+    os.makedirs(locale_dir, exist_ok=True)
+    os.makedirs(icons_dir, exist_ok=True)
+
+    # Copy config files from source
+    src_dir = os.path.dirname(fcitx5_so)
+    for config_file in ['mozc.conf', 'mozc-addon.conf',
+                        'org.fcitx.Fcitx5.Addon.Mozc.metainfo.xml']:
+      src_file = os.path.join(src_dir, config_file)
+      if os.path.exists(src_file):
+        if config_file.endswith('.conf'):
+          dest = os.path.join(inputmethod_dir if config_file == 'mozc.conf' else addon_dir, config_file)
+        elif config_file.endswith('.xml'):
+          dest = os.path.join(metainfo_dir, config_file)
+        else:
+          dest = os.path.join(fcitx5_config_dir, config_file)
+        shutil.copy(src_file, dest)
+
+    # Icons will be handled by install_fcitx5_icons script
+    # Translations (.mo files) will be handled by install_fcitx5_data script
 
   def LocateIconFiles(self, top_dir: str, icons_zip: str) -> None:
     """Locate icon files archived in icons.zip."""
@@ -123,6 +161,9 @@ def ParseArguments() -> argparse.Namespace:
   parser.add_argument(
       '--emacs_client_dir', default='/usr/share/emacs/site-lisp/emacs-mozc'
   )
+  # For fcitx5 addon
+  parser.add_argument('--fcitx5_addon_dir', default='/usr/lib/fcitx5')
+  parser.add_argument('--fcitx5_addon_data_dir', default='/usr/share/fcitx5')
   parser.add_argument('--output')
   return parser.parse_args()
 
