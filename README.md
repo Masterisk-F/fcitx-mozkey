@@ -75,7 +75,8 @@ bazelisk build //unix/fcitx5:fcitx5-mozc.so //server:mozc_server //gui/tool:mozc
 
 ```bash
 # リポジトリルートで実行
-sudo PREFIX=/usr bash scripts/install_fcitx5_bazel
+cd src
+sudo PREFIX=/usr bash ../scripts/install_fcitx5_bazel
 sudo cp src/bazel-bin/server/mozc_server /usr/lib/mozc/
 sudo cp src/bazel-bin/gui/tool/mozc_tool /usr/lib/mozc/
 
