@@ -48,9 +48,6 @@ IBUS_MOZC_PATH = "/usr/lib/ibus-mozc/ibus-engine-mozc"
 EMACS_MOZC_CLIENT_DIR = "/usr/share/emacs/site-lisp/emacs-mozc"
 EMACS_MOZC_HELPER_DIR = "/usr/bin"
 
-FCITX5_ADDON_DIR = "/usr/lib/fcitx5"
-FCITX5_ADDON_DATA_DIR = "/usr/share/fcitx5"
-
 MACOS_BUNDLE_ID_PREFIX = "org.mozc.inputmethod.Japanese"
 MACOS_MIN_OS_VER = "12.0"
 
