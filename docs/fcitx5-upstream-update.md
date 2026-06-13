@@ -19,31 +19,41 @@ git remote add fcitx-mozc https://github.com/fcitx/mozc.git
 
 ## 更新手順 (git subtree pull)
 
+upstreamリポジトリはルートディレクトリに `src/unix/fcitx5/` や `scripts/` があるため、直接 `git subtree pull` を行うとディレクトリがネストしてしまいます。そのため、一度フェッチしてから `git subtree split` を用いて目的のディレクトリのみを切り出し、それをローカルに取り込む手順を踏みます。
+
 ### 方法 1: 推奨 (squash merge)
 
 ```bash
-# 1. upstream から最新を取得
-git fetch fcitx-mozc
+# 1. upstream の最新の fcitx ブランチを取得
+git fetch fcitx-mozc fcitx
 
 # 2. ディレクトリのみを取り込み (squash してコミット履歴をきれいに)
 
 # src/unix/fcitx5 の場合:
-git subtree pull --prefix=src/unix/fcitx5 fcitx-mozc fcitx --squash -m "Update fcitx5 from fcitx/mozc"
+git subtree split --prefix=src/unix/fcitx5 -b fcitx5-split FETCH_HEAD
+git subtree pull --prefix=src/unix/fcitx5 . fcitx5-split --squash -m "Update fcitx5 from fcitx/mozc"
+git branch -D fcitx5-split # 不要になった一時ブランチを削除
 
 # scripts の場合:
-git subtree pull --prefix=scripts fcitx-mozc fcitx --squash -m "Update scripts from fcitx/mozc"
+git subtree split --prefix=scripts -b scripts-split FETCH_HEAD
+git subtree pull --prefix=scripts . scripts-split --squash -m "Update scripts from fcitx/mozc"
+git branch -D scripts-split
 ```
 
 ### 方法 2: 通常の merge (履歴を保持)
 
 ```bash
-git fetch fcitx-mozc
+git fetch fcitx-mozc fcitx
 
 # src/unix/fcitx5 の場合:
-git subtree pull --prefix=src/unix/fcitx5 fcitx-mozc fcitx -m "Merge fcitx5 from fcitx/mozc"
+git subtree split --prefix=src/unix/fcitx5 -b fcitx5-split FETCH_HEAD
+git subtree pull --prefix=src/unix/fcitx5 . fcitx5-split -m "Merge fcitx5 from fcitx/mozc"
+git branch -D fcitx5-split
 
 # scripts の場合:
-git subtree pull --prefix=scripts fcitx-mozc fcitx -m "Merge scripts from fcitx/mozc"
+git subtree split --prefix=scripts -b scripts-split FETCH_HEAD
+git subtree pull --prefix=scripts . scripts-split -m "Merge scripts from fcitx/mozc"
+git branch -D scripts-split
 ```
 
 ## 更新後の確認
@@ -74,13 +84,19 @@ git commit -m "Resolve conflicts from fcitx/mozc update"
 ```bash
 # 現在のディレクトリを削除して再適用
 
+git fetch fcitx-mozc fcitx
+
 # src/unix/fcitx5 の場合:
 rm -rf src/unix/fcitx5
-git subtree add --prefix=src/unix/fcitx5 fcitx-mozc fcitx --squash -m "Re-add fcitx5 from fcitx/mozc"
+git subtree split --prefix=src/unix/fcitx5 -b fcitx5-split FETCH_HEAD
+git subtree add --prefix=src/unix/fcitx5 . fcitx5-split --squash -m "Re-add fcitx5 from fcitx/mozc"
+git branch -D fcitx5-split
 
 # scripts の場合:
 rm -rf scripts
-git subtree add --prefix=scripts fcitx-mozc fcitx --squash -m "Re-add scripts from fcitx/mozc"
+git subtree split --prefix=scripts -b scripts-split FETCH_HEAD
+git subtree add --prefix=scripts . scripts-split --squash -m "Re-add scripts from fcitx/mozc"
+git branch -D scripts-split
 ```
 
 ## 定期的な更新の自動化 (GitHub Actions 例)
@@ -106,9 +122,13 @@ jobs:
         run: git remote add fcitx-mozc https://github.com/fcitx/mozc.git
       - name: Fetch and pull fcitx5 & scripts
         run: |
-          git fetch fcitx-mozc
-          git subtree pull --prefix=src/unix/fcitx5 fcitx-mozc fcitx --squash -m "Update fcitx5 from fcitx/mozc [auto]"
-          git subtree pull --prefix=scripts fcitx-mozc fcitx --squash -m "Update scripts from fcitx/mozc [auto]"
+          git fetch fcitx-mozc fcitx
+          
+          git subtree split --prefix=src/unix/fcitx5 -b fcitx5-split FETCH_HEAD
+          git subtree pull --prefix=src/unix/fcitx5 . fcitx5-split --squash -m "Update fcitx5 from fcitx/mozc [auto]"
+          
+          git subtree split --prefix=scripts -b scripts-split FETCH_HEAD
+          git subtree pull --prefix=scripts . scripts-split --squash -m "Update scripts from fcitx/mozc [auto]"
       - name: Push changes
         run: git push
 ```
@@ -125,9 +145,9 @@ jobs:
 
 | コマンド | 用途 |
 |----------|------|
-| `git subtree pull --prefix=src/unix/fcitx5 fcitx-mozc fcitx --squash` | fcitx5 更新取り込み (推奨) |
-| `git subtree pull --prefix=scripts fcitx-mozc fcitx --squash` | scripts 更新取り込み (推奨) |
-| `git subtree push --prefix=src/unix/fcitx5 fcitx-mozc fcitx` | 変更を upstream に送る (稀) |
-| `git subtree push --prefix=scripts fcitx-mozc fcitx` | 変更を upstream に送る (稀) |
+| `git subtree split --prefix=... -b temp-branch FETCH_HEAD` | upstreamコミットから対象ディレクトリを抽出する |
+| `git subtree pull --prefix=... . temp-branch --squash` | fcitx5 や scripts などの更新取り込み (推奨) |
 | `git log --oneline -- src/unix/fcitx5` | 取り込み履歴確認 |
 | `git log --oneline -- scripts` | 取り込み履歴確認 |
+
+※ `git subtree push` は直接 upstream リポジトリのサブディレクトリを更新する目的には適していません（ルートディレクトリを上書きしてしまうため）。upstream へコントリビュートする場合は、別途パッチを作成するか upstream のディレクトリ構造に合わせたクローンを使用してください。
