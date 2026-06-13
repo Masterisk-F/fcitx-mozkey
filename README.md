@@ -14,6 +14,7 @@
   <img alt="Local first" src="https://img.shields.io/badge/local--first-Zenz-53D4C7">
   <img alt="Release build" src="https://img.shields.io/badge/release-Windows%20MSI-178B8B">
   <img alt="macOS/Linux status" src="https://img.shields.io/badge/macOS%20%2F%20Linux-untested-lightgrey">
+<img alt="fcitx5 support" src="https://img.shields.io/badge/fcitx5-supported-42A5F5">
 </p>
 
 <br>
@@ -53,6 +54,43 @@ Windows 用のビルド済み MSI は [Releases](https://github.com/koyasi777/mo
 > MSI は署名されていないため、Windows の警告が表示される場合があります。
 
 <br>
+
+
+## Linux / fcitx5 対応
+
+fcitx5 アドオンを実装し、Arch Linux / Manjaro 等で fcitx5 経由で mozkey を使用可能です。
+
+### ビルド手順
+
+```bash
+# 依存関係 (Arch Linux)
+sudo pacman -S --needed fcitx5 fcitx5-qt qt6-base bazelisk
+
+# ビルド
+cd src
+bazelisk build //unix/fcitx5:fcitx5-mozc.so //server:mozc_server //gui/tool:mozc_tool --config release_build --config oss_linux
+```
+
+### インストール手順
+
+```bash
+# リポジトリルートで実行
+cd src
+sudo PREFIX=/usr bash ../scripts/install_fcitx5_bazel
+sudo cp src/bazel-bin/server/mozc_server /usr/lib/mozc/
+sudo cp src/bazel-bin/gui/tool/mozc_tool /usr/lib/mozc/
+
+# fcitx5 再起動
+fcitx5 -r
+
+# 設定ツールで Mozc を追加
+fcitx5-configtool
+```
+
+詳細: [docs/fcitx5-upstream-update.md](docs/fcitx5-upstream-update.md)
+
+<br>
+
 
 主な追加機能
 ---------------------------
