@@ -1,3 +1,6 @@
+fcitx-mozkeyは、[mozkey](https://github.com/koyasi777/mozkey)をベースに、[fcitx/mozc](https://github.com/fcitx/mozc)がmozcに対して行った変更内容をマージしたものです。
+基本的に上流リポジトリのマージのみを実施します。本プログラム特有の不具合に限って、このリポジトリで修正を行う方針とします。
+---
 <p align="center">
   <img src="src/data/images/icon.svg" width="112" height="112" alt="Mozkey icon">
 </p>
