@@ -1615,6 +1615,23 @@ bool LaunchLlamaServer(const Options& options, std::string* error) {
 
   Debug("launch llama-server port=random api_key_bytes=" + std::to_string(options.api_key.size()));
 
+  std::vector<std::string> args = {
+      options.llama_server_path,
+      "-m", options.model_path,
+      "-c", std::to_string(options.ctx),
+      "-t", std::to_string(options.threads),
+      "--host", "127.0.0.1",
+      "--port", std::to_string(options.port),
+      "--api-key", options.api_key
+  };
+
+  std::vector<char*> c_args;
+  c_args.reserve(args.size() + 1);
+  for (auto& a : args) {
+    c_args.push_back(const_cast<char*>(a.c_str()));
+  }
+  c_args.push_back(nullptr);
+
   pid_t pid = ::fork();
   if (pid < 0) {
     *error = "fork_failed";
@@ -1630,20 +1647,6 @@ bool LaunchLlamaServer(const Options& options, std::string* error) {
       ::dup2(fd, STDERR_FILENO);
       if (fd > 2) ::close(fd);
     }
-
-    std::vector<std::string> args = {
-        options.llama_server_path,
-        "-m", options.model_path,
-        "-c", std::to_string(options.ctx),
-        "-t", std::to_string(options.threads),
-        "--host", "127.0.0.1",
-        "--port", std::to_string(options.port),
-        "--api-key", options.api_key
-    };
-
-    std::vector<char*> c_args;
-    for (auto& a : args) c_args.push_back(const_cast<char*>(a.c_str()));
-    c_args.push_back(nullptr);
 
     ::execv(options.llama_server_path.c_str(), c_args.data());
     ::_exit(127);
