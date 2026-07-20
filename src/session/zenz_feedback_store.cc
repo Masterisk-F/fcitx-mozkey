@@ -27,15 +27,11 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include "simdutf.h"
 #endif
 
 namespace mozc {
 namespace session {
-namespace {
-
-constexpr int kAcceptThreshold = 1;
-constexpr int kRejectThreshold = 1;
-
 #if defined(_WIN32)
 
 std::wstring Utf8ToWide(absl::string_view s) {
@@ -73,6 +69,25 @@ std::string WideToUtf8(const std::wstring& w) {
   return s;
 }
 
+bool IsValidUtf8ForFeedback(absl::string_view s) {
+  if (s.empty()) {
+    return true;
+  }
+
+  const int input_size = static_cast<int>(s.size());
+  const int wide_size = ::MultiByteToWideChar(
+      CP_UTF8, MB_ERR_INVALID_CHARS, s.data(), input_size, nullptr, 0);
+  return wide_size > 0;
+}
+
+#endif
+
+namespace {
+
+constexpr int kAcceptThreshold = 1;
+constexpr int kRejectThreshold = 1;
+
+#if defined(_WIN32)
 void StoreDebugOutputWide(const std::wstring& message) {
   std::wstring line = L"[zenz-feedback-store] ";
   line.append(message);
@@ -335,34 +350,43 @@ bool IsWritableDirectory(const std::string& dir) {
   return true;
 }
 
+#endif  // !defined(_WIN32)
+
+}  // namespace
+
+#if !defined(_WIN32)
 std::string WideToUtf8(const std::wstring& w) {
   if (w.empty()) {
     return "";
   }
-
-  std::string out;
-  out.reserve(w.size() * 3 + 1);
-  for (const wchar_t wc : w) {
-    if (wc < 0x80) {
-      out.push_back(static_cast<char>(wc));
-    } else if (wc < 0x800) {
-      out.push_back(0xC0 | (wc >> 6));
-      out.push_back(0x80 | (wc & 0x3F));
-    } else if (wc < 0x10000) {
-      out.push_back(0xE0 | (wc >> 12));
-      out.push_back(0x80 | ((wc >> 6) & 0x3F));
-      out.push_back(0x80 | (wc & 0x3F));
-    } else if (wc < 0x200000) {
-      out.push_back(0xF0 | (wc >> 18));
-      out.push_back(0x80 | ((wc >> 12) & 0x3F));
-      out.push_back(0x80 | ((wc >> 6) & 0x3F));
-      out.push_back(0x80 | (wc & 0x3F));
-    }
-  }
+  const char32_t* utf32_input = reinterpret_cast<const char32_t*>(w.data());
+  size_t expected_utf8_len = simdutf::utf8_length_from_utf32(utf32_input, w.size());
+  std::string out(expected_utf8_len, '\0');
+  size_t actual_utf8_len = simdutf::convert_utf32_to_utf8(
+      utf32_input, w.size(), out.data());
+  out.resize(actual_utf8_len);
   return out;
 }
 
-#endif  // !defined(_WIN32)
+std::wstring Utf8ToWide(absl::string_view s) {
+  if (s.empty()) {
+    return L"";
+  }
+  size_t expected_utf32_len = simdutf::utf32_length_from_utf8(s.data(), s.size());
+  std::wstring out(expected_utf32_len, L'\0');
+  char32_t* utf32_output = reinterpret_cast<char32_t*>(out.data());
+  size_t actual_utf32_len = simdutf::convert_utf8_to_utf32(
+      s.data(), s.size(), utf32_output);
+  out.resize(actual_utf32_len);
+  return out;
+}
+
+bool IsValidUtf8ForFeedback(absl::string_view s) {
+  return simdutf::validate_utf8(s.data(), s.size());
+}
+#endif
+
+namespace {
 
 std::string EscapeTsv(absl::string_view s) {
   std::string out;
@@ -472,23 +496,6 @@ bool ContainsUnsafeTsvTextChar(absl::string_view s) {
   }
   return false;
 }
-
-#if defined(_WIN32)
-bool IsValidUtf8ForFeedback(absl::string_view s) {
-  if (s.empty()) {
-    return true;
-  }
-
-  const int input_size = static_cast<int>(s.size());
-  const int wide_size = ::MultiByteToWideChar(
-      CP_UTF8, MB_ERR_INVALID_CHARS, s.data(), input_size, nullptr, 0);
-  return wide_size > 0;
-}
-#else
-bool IsValidUtf8ForFeedback(absl::string_view) {
-  return true;
-}
-#endif
 
 bool IsKnownContextClass(absl::string_view context_class) {
   return context_class == "empty" ||

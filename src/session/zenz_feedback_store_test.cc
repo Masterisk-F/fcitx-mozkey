@@ -16,34 +16,6 @@ namespace mozc {
 namespace session {
 namespace {
 
-// Converts a wide string to UTF-8 for direct file access in tests.
-// This is a test-only helper, separate from the implementation's WideToUtf8.
-std::string WideToUtf8ForTest(const std::wstring& w) {
-  if (w.empty()) {
-    return "";
-  }
-  std::string out;
-  out.reserve(w.size() * 3 + 1);
-  for (const wchar_t wc : w) {
-    if (wc < 0x80) {
-      out.push_back(static_cast<char>(wc));
-    } else if (wc < 0x800) {
-      out.push_back(0xC0 | (wc >> 6));
-      out.push_back(0x80 | (wc & 0x3F));
-    } else if (wc < 0x10000) {
-      out.push_back(0xE0 | (wc >> 12));
-      out.push_back(0x80 | ((wc >> 6) & 0x3F));
-      out.push_back(0x80 | (wc & 0x3F));
-    } else if (wc < 0x200000) {
-      out.push_back(0xF0 | (wc >> 18));
-      out.push_back(0x80 | ((wc >> 12) & 0x3F));
-      out.push_back(0x80 | ((wc >> 6) & 0x3F));
-      out.push_back(0x80 | (wc & 0x3F));
-    }
-  }
-  return out;
-}
-
 #if defined(_WIN32)
 
 std::wstring JoinPath(const std::wstring& lhs, const std::wstring& rhs) {
@@ -130,7 +102,7 @@ class ScopedUserProfileForZenzFeedbackStoreTest {
   const std::wstring& feedback_wide_path() const { return feedback_path(); }
   // For direct std::ofstream access on Linux.
   std::string feedback_utf8_path() const {
-    return WideToUtf8ForTest(feedback_path());
+    return WideToUtf8(feedback_path());
   }
 
   std::wstring temp_file_path(const std::wstring& name) const {
@@ -139,7 +111,7 @@ class ScopedUserProfileForZenzFeedbackStoreTest {
 
   // UTF-8 path for std::ofstream on Linux.
   std::string temp_file_utf8_path(const std::wstring& name) const {
-    return WideToUtf8ForTest(JoinPath(profile_dir_, name));
+    return WideToUtf8(JoinPath(profile_dir_, name));
   }
 
  private:
@@ -188,14 +160,7 @@ class ScopedUserProfileForZenzFeedbackStoreTest {
   bool ok() const { return ok_; }
 
   std::wstring feedback_path() const {
-    std::string path = profile_dir_ + "/zenz_feedback.tsv";
-    // Widen for the wstring-based API.
-    std::wstring result;
-    result.reserve(path.size());
-    for (const char c : path) {
-      result.push_back(static_cast<wchar_t>(static_cast<unsigned char>(c)));
-    }
-    return result;
+    return Utf8ToWide(profile_dir_ + "/zenz_feedback.tsv");
   }
 
   std::string feedback_utf8_path() const {
@@ -203,18 +168,13 @@ class ScopedUserProfileForZenzFeedbackStoreTest {
   }
 
   std::wstring temp_file_path(const std::wstring& name) const {
-    std::string name_utf8 = WideToUtf8ForTest(name);
+    std::string name_utf8 = WideToUtf8(name);
     std::string full_utf8 = profile_dir_ + "/" + name_utf8;
-    std::wstring result;
-    result.reserve(full_utf8.size());
-    for (const char c : full_utf8) {
-      result.push_back(static_cast<wchar_t>(static_cast<unsigned char>(c)));
-    }
-    return result;
+    return Utf8ToWide(full_utf8);
   }
 
   std::string temp_file_utf8_path(const std::wstring& name) const {
-    std::string name_utf8 = WideToUtf8ForTest(name);
+    std::string name_utf8 = WideToUtf8(name);
     return profile_dir_ + "/" + name_utf8;
   }
 
@@ -621,6 +581,41 @@ TEST(ZenzFeedbackStoreTest, ImportRejectsMalformedFileWithoutChangingExisting) {
   EXPECT_EQ(entries[0].value, "既存");
   EXPECT_EQ(entries[0].accepted_count, 1);
   EXPECT_EQ(entries[0].rejected_count, 0);
+}
+
+TEST(ZenzFeedbackStoreTest, WideToUtf8EdgeCases) {
+  // Test basic ASCII
+  EXPECT_EQ(WideToUtf8(L"hello"), "hello");
+  
+  // Test Japanese characters
+  EXPECT_EQ(WideToUtf8(L"日本語"), "日本語");
+  
+  // Test surrogate pairs/U+10FFFF range
+  std::wstring emoji = L"𡈽";
+  EXPECT_EQ(WideToUtf8(emoji), "𡈽");
+
+#ifndef _WIN32
+  // Invalid UTF-32 is handled gracefully by simdutf (returns empty string)
+  std::wstring invalid_wide = L"abc";
+  invalid_wide.push_back(static_cast<wchar_t>(0xD800)); // surrogate
+  invalid_wide.append(L"def");
+  std::string result = WideToUtf8(invalid_wide);
+  EXPECT_EQ(result, "");
+#endif
+}
+
+TEST(ZenzFeedbackStoreTest, IsValidUtf8ForFeedback) {
+  // Valid UTF-8
+  EXPECT_TRUE(IsValidUtf8ForFeedback(""));
+  EXPECT_TRUE(IsValidUtf8ForFeedback("hello"));
+  EXPECT_TRUE(IsValidUtf8ForFeedback("日本語"));
+  EXPECT_TRUE(IsValidUtf8ForFeedback("𡈽"));
+
+  // Invalid UTF-8
+  EXPECT_FALSE(IsValidUtf8ForFeedback("\xFF"));
+  EXPECT_FALSE(IsValidUtf8ForFeedback("\xC0\x80")); // Overlong NUL
+  EXPECT_FALSE(IsValidUtf8ForFeedback("\xED\xA0\x80")); // Surrogate pair U+D800
+  EXPECT_FALSE(IsValidUtf8ForFeedback("\xF4\x90\x80\x80")); // Out of range (> 0x10FFFF)
 }
 
 }  // namespace

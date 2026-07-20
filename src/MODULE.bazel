@@ -29,6 +29,11 @@
 
 module(name = "mozc")
 
+bazel_dep(
+    name = "simdutf",
+    version = "7.7.0",
+)
+
 # absl-cpp: 20260107.1 2026-02-12
 # https://github.com/abseil/abseil-cpp
 bazel_dep(

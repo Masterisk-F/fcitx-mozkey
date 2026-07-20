@@ -57,6 +57,7 @@ mozc_cc_library(
         "@com_google_absl//absl/log",
         "@com_google_absl//absl/strings",
         "//base:system_util",
+        "@simdutf",
     ],
 )
 

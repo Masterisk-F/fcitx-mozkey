@@ -100,6 +100,10 @@ class ZenzFeedbackStore {
                       absl::string_view reason);
 };
 
+std::string WideToUtf8(const std::wstring& w);
+std::wstring Utf8ToWide(absl::string_view s);
+bool IsValidUtf8ForFeedback(absl::string_view s);
+
 }  // namespace session
 }  // namespace mozc
 
