@@ -16,10 +16,13 @@
 #else
 #include <fcntl.h>
 #include <signal.h>
+#include <spawn.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+extern "C" char** environ;
 #endif
 
 namespace mozc {
@@ -131,6 +134,8 @@ std::wstring JoinPath(const std::wstring& dir, const std::wstring& file) {
   return dir + L"\\" + file;
 }
 
+}  // namespace
+
 bool LaunchZenzScorerIfNeeded() {
   static std::atomic<DWORD> last_launch_tick{0};
   constexpr DWORD kLaunchThrottleMsec = 2000;
@@ -203,6 +208,8 @@ bool LaunchZenzScorerIfNeeded() {
   ::CloseHandle(process.hProcess);
   return true;
 }
+
+namespace {
 
 ZenzSocketHandle OpenPipeWithAutoLaunch(const std::wstring& pipe_name,
                                         uint32_t timeout_msec) {
@@ -370,6 +377,8 @@ ZenzSocketHandle TryOpenPipeOnce(const std::string& pipe_name) {
   return sock;
 }
 
+}  // namespace
+
 bool LaunchZenzScorerIfNeeded() {
   static std::atomic<uint64_t> last_launch_tick{0};
   constexpr uint64_t kLaunchThrottleMsec = 2000;
@@ -399,41 +408,42 @@ bool LaunchZenzScorerIfNeeded() {
     }
   }
 
-  std::string scorer_path = dir + "/mozc_zenz_scorer";
+  std::string scorer_path;
+  const char* env_path = getenv("MOZC_TEST_SCORER_PATH");
+  if (env_path != nullptr) {
+    scorer_path = env_path;
+  } else {
+    scorer_path = dir + "/mozc_zenz_scorer";
+  }
   if (::access(scorer_path.c_str(), X_OK) != 0) {
     return false;
   }
 
-  pid_t pid = ::fork();
-  if (pid == 0) {
-    // Child process: double fork to avoid zombies
-    pid_t pid2 = ::fork();
-    if (pid2 == 0) {
-      ::setsid(); // Detach from session
+  // 子プロセスの自動回収設定 (ゾンビ化の防止)
+  struct sigaction sa = {};
+  sa.sa_handler = SIG_IGN;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = SA_NOCLDWAIT;
+  ::sigaction(SIGCHLD, &sa, nullptr);
 
-      // Redirect stdio to /dev/null
-      int fd = ::open("/dev/null", O_RDWR);
-      if (fd >= 0) {
-        ::dup2(fd, STDIN_FILENO);
-        ::dup2(fd, STDOUT_FILENO);
-        ::dup2(fd, STDERR_FILENO);
-        if (fd > 2) {
-          ::close(fd);
-        }
-      }
+  posix_spawnattr_t attr;
+  posix_spawnattr_init(&attr);
+  posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETPGROUP);
 
-      ::execl(scorer_path.c_str(), "mozc_zenz_scorer", nullptr);
-      ::_exit(127);
-    }
-    ::_exit(0);
-  } else if (pid > 0) {
-    // Parent process: wait for the first child
-    ::waitpid(pid, nullptr, 0);
+  pid_t pid;
+  char* argv[] = {const_cast<char*>("mozc_zenz_scorer"), nullptr};
+  int ret = posix_spawn(&pid, scorer_path.c_str(), nullptr, &attr, argv, environ);
+
+  posix_spawnattr_destroy(&attr);
+
+  if (ret == 0) {
     return true;
   }
 
   return false;
 }
+
+namespace {
 
 ZenzSocketHandle OpenPipeWithAutoLaunch(const std::string& pipe_name,
                                         uint32_t timeout_msec) {

@@ -11,11 +11,15 @@
 
 #include <string>
 #include <thread>
+#include <fstream>
 
 #include "testing/gunit.h"
 
 namespace mozc {
 namespace session {
+
+bool LaunchZenzScorerIfNeeded();
+
 namespace {
 
 TEST(ZenzNamedPipeClientTest, LinuxFallback) {
@@ -66,6 +70,31 @@ TEST(ZenzNamedPipeClientTest, LinuxFallback) {
   close(fd);
   unlink(socket_path.c_str());
   rmdir(temp_dir);
+#endif
+}
+
+TEST(ZenzNamedPipeClientTest, LaunchScorerViaPosixSpawn) {
+#ifndef _WIN32
+  // Sleep to clear the 2-second launch throttle from any previous tests
+  std::this_thread::sleep_for(std::chrono::milliseconds(2100));
+
+  const char* test_tmpdir = getenv("TEST_TMPDIR");
+  std::string dir = test_tmpdir ? test_tmpdir : "/tmp";
+  std::string dummy_path = dir + "/mozc_zenz_scorer";
+  {
+    std::ofstream os(dummy_path);
+    os << "#!/bin/sh\nexit 0\n";
+  }
+  chmod(dummy_path.c_str(), 0755);
+
+  // Set override environment variable for the test
+  setenv("MOZC_TEST_SCORER_PATH", dummy_path.c_str(), 1);
+
+  bool result = LaunchZenzScorerIfNeeded();
+  EXPECT_TRUE(result);
+
+  unsetenv("MOZC_TEST_SCORER_PATH");
+  unlink(dummy_path.c_str());
 #endif
 }
 
