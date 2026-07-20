@@ -1601,7 +1601,6 @@ void StopLlamaServer() {
 
 void HandleSignal(int sig) {
   g_shutdown_requested = true;
-  StopLlamaServer();
 }
 
 bool LaunchLlamaServer(const Options& options, std::string* error) {

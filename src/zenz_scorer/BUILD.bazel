@@ -28,6 +28,15 @@ mozc_cc_test(
     ],
 )
 
+mozc_cc_test(
+    name = "scorer_signal_test",
+    srcs = ["scorer_signal_test.cc"],
+    data = [":mozc_zenz_scorer"],
+    deps = [
+        "//testing:gunit_main",
+    ],
+)
+
 # A header-only library for constants.h to be used in constants_test
 mozc_cc_library(
     name = "constants_h",
