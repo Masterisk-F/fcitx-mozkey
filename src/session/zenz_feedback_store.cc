@@ -345,7 +345,9 @@ bool IsWritableDirectory(const std::string& dir) {
     return false;
   }
   close(fd);
-  unlink(probe_path.c_str());
+  if (unlink(probe_path.c_str()) != 0) {
+    StoreDebugOutput("IsWritableDirectory: failed to unlink probe file " + probe_path);
+  }
 
   return true;
 }
