@@ -33,6 +33,8 @@
 #include <thread>
 #include <vector>
 
+#include "zenz_scorer/constants.h"
+
 #if defined(_WIN32)
 #pragma comment(lib, "Advapi32.lib")
 #pragma comment(lib, "Bcrypt.lib")
@@ -50,10 +52,6 @@ std::mutex g_llama_process_mutex;
 #if defined(_WIN32)
 HANDLE g_llama_process = nullptr;
 HANDLE g_llama_job = nullptr;
-
-constexpr wchar_t kDefaultPipeName[] = L"\\.\pipe\mozc_zenz_scorer";
-constexpr wchar_t kSingleInstanceMutexName[] =
-    L"Local\MozcZenzScorerSingleInstance";
 #else
 pid_t g_llama_process = -1;
 constexpr char kDefaultPipeNameSuffix[] = "/.mozc_zenz_scorer_pipe";
@@ -117,7 +115,7 @@ struct ZenzWireResponseHeader {
 
 #if defined(_WIN32)
 struct Options {
-  std::wstring pipe_name = kDefaultPipeName;
+  std::wstring pipe_name = mozc::zenz_scorer::kDefaultPipeName;
   std::wstring host = kDefaultHost;
   int port = 0;
   std::string api_key;
@@ -2065,7 +2063,7 @@ int wmain() {
   ::SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
 
   HANDLE single_instance_mutex =
-      ::CreateMutexW(nullptr, TRUE, kSingleInstanceMutexName);
+      ::CreateMutexW(nullptr, TRUE, mozc::zenz_scorer::kSingleInstanceMutexName);
 
   if (single_instance_mutex != nullptr &&
       ::GetLastError() == ERROR_ALREADY_EXISTS) {
