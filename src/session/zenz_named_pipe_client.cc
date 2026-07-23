@@ -555,13 +555,14 @@ ZenzLiveResponse ZenzNamedPipeClient::Convert(
   }
 #else
   std::string pipe_name = request.pipe_name;
-  if (pipe_name.rfind("\\\\.\\pipe\\", 0) == 0) {
+  if (pipe_name.empty() || pipe_name.rfind("\\\\.\\pipe\\", 0) == 0) {
     pipe_name = std::string(getenv("HOME") ? getenv("HOME") : "/tmp") + "/.mozc_zenz_scorer_pipe";
-  }
-  if (pipe_name.empty()) {
-    response.ok = false;
-    response.debug = "invalid_pipe_name";
-    return response;
+  } else {
+    if (pipe_name.find("..") != std::string::npos) {
+      response.ok = false;
+      response.debug = "invalid_pipe_name_traversal";
+      return response;
+    }
   }
 #endif
 
