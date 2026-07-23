@@ -2031,6 +2031,9 @@ int RunServer(const Options& options) {
     return 1;
   }
 
+  // Force 0600 permissions for secure local IPC
+  ::chmod(socket_path.c_str(), 0600);
+
   if (::listen(server_sock, 128) < 0) {
     Debug("Failed to listen on UNIX domain socket");
     ::close(server_sock);
