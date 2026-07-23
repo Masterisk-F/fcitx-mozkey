@@ -1032,14 +1032,33 @@ bool WriteFeedbackRecordsAtomically(
   const std::string tmp_path =
       path + ".tmp." + std::to_string(getpid());
 
-  {
-    std::ofstream file(tmp_path, std::ios::binary | std::ios::trunc);
-    if (!file || !WriteRecordsToStream(records, &file)) {
-      unlink(tmp_path.c_str());
-      StoreDebugOutput("atomic write failed: write to tmp file failed");
-      return false;
-    }
+  std::ostringstream oss;
+  if (!WriteRecordsToStream(records, &oss)) {
+    StoreDebugOutput("atomic write failed: format error");
+    return false;
   }
+  const std::string data = oss.str();
+
+  int fd = ::open(tmp_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0600);
+  if (fd < 0) {
+    StoreDebugOutput("atomic write failed: open error");
+    return false;
+  }
+
+  if (::write(fd, data.data(), data.size()) != static_cast<ssize_t>(data.size())) {
+    ::close(fd);
+    ::unlink(tmp_path.c_str());
+    StoreDebugOutput("atomic write failed: write error");
+    return false;
+  }
+
+  if (::fsync(fd) != 0) {
+    StoreDebugOutput("atomic write failed: fsync error");
+    ::close(fd);
+    ::unlink(tmp_path.c_str());
+    return false;
+  }
+  ::close(fd);
 
   if (rename(tmp_path.c_str(), path.c_str()) != 0) {
     StoreDebugOutput("atomic write failed: rename error");
