@@ -419,27 +419,26 @@ bool LaunchZenzScorerIfNeeded() {
     return false;
   }
 
-  // 子プロセスの自動回収設定 (ゾンビ化の防止)
-  struct sigaction sa = {};
-  sa.sa_handler = SIG_IGN;
-  sigemptyset(&sa.sa_mask);
-  sa.sa_flags = SA_NOCLDWAIT;
-  ::sigaction(SIGCHLD, &sa, nullptr);
-
-  posix_spawnattr_t attr;
-  posix_spawnattr_init(&attr);
-  posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETPGROUP);
-
-  pid_t pid;
-  char* argv[] = {const_cast<char*>("mozc_zenz_scorer"), nullptr};
-  int ret = posix_spawn(&pid, scorer_path.c_str(), nullptr, &attr, argv, environ);
-
-  posix_spawnattr_destroy(&attr);
-
-  if (ret == 0) {
-    return true;
+  pid_t pid = ::fork();
+  if (pid == 0) {
+    pid_t pid2 = ::fork();
+    if (pid2 == 0) {
+      ::setsid();
+      char* argv[] = {const_cast<char*>("mozc_zenz_scorer"), nullptr};
+      ::execve(scorer_path.c_str(), argv, environ);
+      ::_exit(127);
+    }
+    if (pid2 < 0) {
+      ::_exit(1);
+    }
+    ::_exit(0);
   }
-
+  
+  if (pid > 0) {
+    int status = 0;
+    ::waitpid(pid, &status, 0);
+    return (WIFEXITED(status) && WEXITSTATUS(status) == 0);
+  }
   return false;
 }
 
