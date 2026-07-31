@@ -47,6 +47,52 @@ constexpr uint32_t kZenzWireMagic = 0x315A4E5A;  // "ZNZ1"
 constexpr uint16_t kZenzWireVersion = 1;
 constexpr uint16_t kZenzWireKindRequest = 1;
 
+#ifndef _WIN32
+class ScopedScorer {
+ public:
+  ScopedScorer(std::string temp_home, std::string socket_path)
+      : pid_(-1), temp_home_(std::move(temp_home)), socket_path_(std::move(socket_path)), sock_(-1) {}
+
+  ~ScopedScorer() {
+    if (sock_ >= 0) {
+      ::close(sock_);
+    }
+    if (pid_ > 0) {
+      ::kill(pid_, SIGTERM);
+      int status = 0;
+      bool exited = false;
+      for (int i = 0; i < 30; ++i) {
+        pid_t wait_ret = ::waitpid(pid_, &status, WNOHANG);
+        if (wait_ret == pid_) {
+          exited = true;
+          break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      }
+      if (!exited) {
+        ::kill(pid_, SIGKILL);
+        ::waitpid(pid_, nullptr, 0);
+      }
+    }
+    if (!socket_path_.empty()) {
+      ::unlink(socket_path_.c_str());
+    }
+    if (!temp_home_.empty()) {
+      ::rmdir(temp_home_.c_str());
+    }
+  }
+
+  void set_pid(pid_t pid) { pid_ = pid; }
+  void set_sock(int sock) { sock_ = sock; }
+
+ private:
+  pid_t pid_;
+  std::string temp_home_;
+  std::string socket_path_;
+  int sock_;
+};
+#endif
+
 TEST(ScorerSignalTest, TerminateGracefully) {
 #ifndef _WIN32
   // Get directory of current executable
@@ -65,6 +111,9 @@ TEST(ScorerSignalTest, TerminateGracefully) {
   // Create a unique, short temp directory for HOME to avoid socket path limits (>108 chars) in Bazel sandbox
   std::string temp_home = "/tmp/zenz_home_" + std::to_string(getpid());
   ::mkdir(temp_home.c_str(), 0755);
+  std::string socket_path = temp_home + "/.mozc_zenz_scorer_pipe";
+
+  ScopedScorer scoped_scorer(temp_home, socket_path);
 
   pid_t pid = fork();
   ASSERT_GE(pid, 0);
@@ -79,6 +128,8 @@ TEST(ScorerSignalTest, TerminateGracefully) {
     std::cerr << "execv failed: " << strerror(errno) << std::endl;
     ::_exit(127);
   }
+
+  scoped_scorer.set_pid(pid);
 
   // Parent: wait for scorer to start up (up to 1.5 seconds)
   std::this_thread::sleep_for(std::chrono::milliseconds(1500));
@@ -109,11 +160,6 @@ TEST(ScorerSignalTest, TerminateGracefully) {
     kill(pid, SIGKILL);
     waitpid(pid, nullptr, 0);
   }
-
-  // Clean up temp home
-  std::string socket_path = temp_home + "/.mozc_zenz_scorer_pipe";
-  ::unlink(socket_path.c_str());
-  ::rmdir(temp_home.c_str());
 #endif
 }
 
@@ -133,6 +179,9 @@ TEST(ScorerSignalTest, UnixSocketLoopTest) {
 
   std::string temp_home = "/tmp/zenz_home_loop_" + std::to_string(getpid());
   ::mkdir(temp_home.c_str(), 0755);
+  std::string socket_path = temp_home + "/.mozc_zenz_scorer_pipe";
+
+  ScopedScorer scoped_scorer(temp_home, socket_path);
 
   pid_t pid = fork();
   ASSERT_GE(pid, 0);
@@ -144,13 +193,15 @@ TEST(ScorerSignalTest, UnixSocketLoopTest) {
     ::_exit(127);
   }
 
+  scoped_scorer.set_pid(pid);
+
   // Parent: wait for scorer to start up
   std::this_thread::sleep_for(std::chrono::milliseconds(1500));
 
   // Connect to unix domain socket
-  std::string socket_path = temp_home + "/.mozc_zenz_scorer_pipe";
   int sock = ::socket(AF_UNIX, SOCK_STREAM, 0);
   ASSERT_GE(sock, 0);
+  scoped_scorer.set_sock(sock);
 
   struct sockaddr_un addr = {};
   addr.sun_family = AF_UNIX;
@@ -182,16 +233,6 @@ TEST(ScorerSignalTest, UnixSocketLoopTest) {
     ::read(sock, debug_buf, res.debug_size);
     EXPECT_STREQ(debug_buf, "bad_request_header");
   }
-
-  ::close(sock);
-
-  // Send SIGTERM and wait
-  kill(pid, SIGTERM);
-  int status = 0;
-  waitpid(pid, &status, 0);
-
-  ::unlink(socket_path.c_str());
-  ::rmdir(temp_home.c_str());
 #endif
 }
 
