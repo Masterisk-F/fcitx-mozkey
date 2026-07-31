@@ -2026,14 +2026,23 @@ int RunServer(const Options& options) {
   std::strncpy(addr.sun_path, socket_path.c_str(), sizeof(addr.sun_path) - 1);
   ::unlink(socket_path.c_str());
 
-  if (::bind(server_sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+  mode_t old_umask = ::umask(0177);
+  const int bind_result = ::bind(server_sock, (struct sockaddr*)&addr, sizeof(addr));
+  ::umask(old_umask);
+
+  if (bind_result < 0) {
     Debug("Failed to bind UNIX domain socket");
     ::close(server_sock);
     return 1;
   }
 
   // Force 0600 permissions for secure local IPC
-  ::chmod(socket_path.c_str(), 0600);
+  if (::chmod(socket_path.c_str(), 0600) < 0) {
+    Debug("Failed to chmod UNIX domain socket");
+    ::close(server_sock);
+    ::unlink(socket_path.c_str());
+    return 1;
+  }
 
   if (::listen(server_sock, 128) < 0) {
     Debug("Failed to listen on UNIX domain socket");
