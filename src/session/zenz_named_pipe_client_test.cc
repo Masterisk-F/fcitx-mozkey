@@ -98,6 +98,56 @@ TEST(ZenzNamedPipeClientTest, LaunchScorerViaPosixSpawn) {
 #endif
 }
 
+TEST(ZenzNamedPipeClientTest, PathValidationTest) {
+#ifndef _WIN32
+  // Create a temporary directory to act as HOME
+  char temp_dir[] = "/tmp/zenz_path_test_XXXXXX";
+  EXPECT_TRUE(mkdtemp(temp_dir) != nullptr);
+  setenv("HOME", temp_dir, 1);
+
+  ZenzNamedPipeClient client;
+  ZenzLiveRequest request;
+  request.timeout_msec = 10;
+
+  // 1. Safe absolute path under HOME
+  {
+    request.pipe_name = std::string(temp_dir) + "/safe.pipe";
+    ZenzLiveResponse response = client.Convert(request);
+    EXPECT_EQ(response.debug, "pipe_open_failed");
+  }
+
+  // 2. Safe absolute path under /tmp/
+  {
+    request.pipe_name = "/tmp/safe.pipe";
+    ZenzLiveResponse response = client.Convert(request);
+    EXPECT_EQ(response.debug, "pipe_open_failed");
+  }
+
+  // 3. Unsafe absolute path
+  {
+    request.pipe_name = "/etc/shadow";
+    ZenzLiveResponse response = client.Convert(request);
+    EXPECT_EQ(response.debug, "invalid_pipe_name_traversal");
+  }
+
+  // 4. Path containing ..
+  {
+    request.pipe_name = "/tmp/../etc/shadow";
+    ZenzLiveResponse response = client.Convert(request);
+    EXPECT_EQ(response.debug, "invalid_pipe_name_traversal");
+  }
+
+  // 5. Relative path
+  {
+    request.pipe_name = "relative_path.pipe";
+    ZenzLiveResponse response = client.Convert(request);
+    EXPECT_EQ(response.debug, "invalid_pipe_name_traversal");
+  }
+
+  rmdir(temp_dir);
+#endif
+}
+
 }  // namespace
 }  // namespace session
 }  // namespace mozc

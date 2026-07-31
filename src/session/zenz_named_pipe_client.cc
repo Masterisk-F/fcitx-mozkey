@@ -419,26 +419,51 @@ bool LaunchZenzScorerIfNeeded() {
     return false;
   }
 
+  int pipefd[2];
+  if (::pipe2(pipefd, O_CLOEXEC) < 0) {
+    return false;
+  }
+
   pid_t pid = ::fork();
   if (pid == 0) {
+    ::close(pipefd[0]);
+
     pid_t pid2 = ::fork();
     if (pid2 == 0) {
       ::setsid();
       char* argv[] = {const_cast<char*>("mozc_zenz_scorer"), nullptr};
       ::execve(scorer_path.c_str(), argv, environ);
+      
+      int err = errno;
+      ssize_t written = ::write(pipefd[1], &err, sizeof(err));
+      (void)written;
       ::_exit(127);
     }
     if (pid2 < 0) {
+      int err = errno;
+      ssize_t written = ::write(pipefd[1], &err, sizeof(err));
+      (void)written;
       ::_exit(1);
     }
     ::_exit(0);
   }
   
+  ::close(pipefd[1]);
+
   if (pid > 0) {
     int status = 0;
     ::waitpid(pid, &status, 0);
-    return (WIFEXITED(status) && WEXITSTATUS(status) == 0);
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+      int err = 0;
+      ssize_t n = ::read(pipefd[0], &err, sizeof(err));
+      ::close(pipefd[0]);
+      if (n == 0) {
+        return true;
+      }
+      return false;
+    }
   }
+  ::close(pipefd[0]);
   return false;
 }
 
@@ -557,7 +582,20 @@ ZenzLiveResponse ZenzNamedPipeClient::Convert(
   if (pipe_name.empty() || pipe_name.rfind("\\\\.\\pipe\\", 0) == 0) {
     pipe_name = std::string(getenv("HOME") ? getenv("HOME") : "/tmp") + "/.mozc_zenz_scorer_pipe";
   } else {
-    if (pipe_name.find("..") != std::string::npos) {
+    bool safe = false;
+    if (pipe_name.find("..") == std::string::npos && pipe_name[0] == '/') {
+      const char* home = getenv("HOME");
+      if (home != nullptr && home[0] != '\0') {
+        std::string home_prefix = std::string(home) + "/";
+        if (pipe_name.rfind(home_prefix, 0) == 0) {
+          safe = true;
+        }
+      }
+      if (!safe && pipe_name.rfind("/tmp/", 0) == 0) {
+        safe = true;
+      }
+    }
+    if (!safe) {
       response.ok = false;
       response.debug = "invalid_pipe_name_traversal";
       return response;
