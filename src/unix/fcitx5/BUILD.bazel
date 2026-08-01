@@ -3,6 +3,7 @@ load(
     "//:build_defs.bzl",
     "mozc_cc_binary",
     "mozc_cc_library",
+    "mozc_cc_test",
 )
 
 package(default_visibility = ["//:__subpackages__"])
@@ -178,5 +179,30 @@ mozc_cc_binary(
     linkstatic = 1,
     deps = [
         ":mozc_engine",
+    ],
+)
+
+mozc_cc_test(
+    name = "mozc_response_parser_test",
+    srcs = [
+        "mozc_response_parser_test.cc",
+        "mozc_response_parser.cc",
+        "mozc_response_parser.h",
+        "mozc_engine.h",
+        "mozc_state.h",
+    ],
+    deps = [
+        ":i18nwrapper",
+        ":fcitx_key_util",
+        ":surrounding_text_util",
+        ":mozc_client_pool",
+        "//base:vlog",
+        "//protocol:candidate_window_cc_proto",
+        "//protocol:commands_cc_proto",
+        "//protocol:config_cc_proto",
+        "//testing:gunit_main",
+        "@fcitx5",
+        "@com_google_absl//absl/log:check",
+        "@com_google_absl//absl/log",
     ],
 )

@@ -34,7 +34,14 @@
 #include <thread>
 #include <vector>
 
-#include "zenz_scorer/constants.h"
+#if defined(_WIN32)
+namespace mozc {
+namespace zenz_scorer {
+constexpr wchar_t kDefaultPipeName[] = L"\\\\.\\pipe\\mozc_zenz_scorer";
+constexpr wchar_t kSingleInstanceMutexName[] = L"Local\\MozcZenzScorerSingleInstance";
+}  // namespace zenz_scorer
+}  // namespace mozc
+#endif
 
 #if defined(_WIN32)
 #pragma comment(lib, "Advapi32.lib")
