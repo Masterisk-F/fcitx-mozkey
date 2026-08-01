@@ -605,6 +605,14 @@ ZenzLiveResponse ZenzNamedPipeClient::Convert(
 
   ZenzSocketHandle pipe = OpenPipeWithAutoLaunch(pipe_name, request.timeout_msec);
 
+  if (pipe != kInvalidZenzSocket) {
+    struct timeval tv;
+    tv.tv_sec = request.timeout_msec / 1000;
+    tv.tv_usec = (request.timeout_msec % 1000) * 1000;
+    ::setsockopt(pipe, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    ::setsockopt(pipe, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+  }
+
   if (pipe == kInvalidZenzSocket) {
     response.ok = false;
     response.debug = "pipe_open_failed";

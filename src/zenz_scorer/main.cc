@@ -2067,7 +2067,15 @@ int RunServer(const Options& options) {
       std::this_thread::sleep_for(std::chrono::milliseconds(1000));
       continue;
     }
-    
+
+    {
+      struct timeval tv;
+      tv.tv_sec = kMaxRequestTimeoutMsec / 1000;
+      tv.tv_usec = (kMaxRequestTimeoutMsec % 1000) * 1000;
+      ::setsockopt(client_sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+      ::setsockopt(client_sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    }
+
     HandleClient(client_sock, options);
     ::close(client_sock);
   }
