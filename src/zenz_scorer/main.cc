@@ -1761,6 +1761,9 @@ bool HttpPostCompletion(
 #endif
     ssize_t written = ::send(sock, ptr, remaining, kSendFlags);
     if (written <= 0) {
+      if (errno == EINTR) {
+        continue;
+      }
       ::close(sock);
       *debug = "send_failed";
       return false;
