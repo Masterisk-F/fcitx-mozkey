@@ -352,6 +352,14 @@ bool IsWritableDirectory(const std::string& dir) {
   return true;
 }
 
+void FsyncDirectory(const std::string& dir) {
+  int dir_fd = ::open(dir.c_str(), O_RDONLY);
+  if (dir_fd >= 0) {
+    ::fsync(dir_fd);
+    ::close(dir_fd);
+  }
+}
+
 #endif  // !defined(_WIN32)
 
 }  // namespace
@@ -1017,6 +1025,7 @@ bool WriteFeedbackRecordsAtomically(
   if (records.empty()) {
     if (unlink(path.c_str()) == 0) {
       StoreDebugOutput("clear ok: file removed");
+      FsyncDirectory(dir);
       return true;
     }
 
@@ -1065,6 +1074,8 @@ bool WriteFeedbackRecordsAtomically(
     unlink(tmp_path.c_str());
     return false;
   }
+
+  FsyncDirectory(dir);
 
   StoreDebugOutput("atomic write ok");
   return true;
