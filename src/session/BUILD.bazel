@@ -54,7 +54,10 @@ mozc_cc_library(
         "//session:__pkg__",
     ],
     deps = [
+        "@com_google_absl//absl/log",
         "@com_google_absl//absl/strings",
+        "//base:system_util",
+        "@simdutf",
     ],
 )
 
@@ -108,6 +111,16 @@ mozc_cc_library(
         "@com_google_absl//absl/log:check",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
+    ],
+)
+
+mozc_cc_test(
+    name = "zenz_named_pipe_client_test",
+    size = "small",
+    srcs = ["zenz_named_pipe_client_test.cc"],
+    deps = [
+        ":session",
+        "//testing:gunit_main",
     ],
 )
 

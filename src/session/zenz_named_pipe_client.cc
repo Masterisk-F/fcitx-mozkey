@@ -13,7 +13,17 @@
 
 #if defined(_WIN32)
 #include <windows.h>
-#endif  // _WIN32
+#else
+#include <fcntl.h>
+#include <signal.h>
+#include <spawn.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+extern "C" char** environ;
+#endif
 
 namespace mozc {
 namespace session {
@@ -49,6 +59,13 @@ struct ZenzWireResponseHeader {
 
 #if defined(_WIN32)
 
+using ZenzSocketHandle = HANDLE;
+const ZenzSocketHandle kInvalidZenzSocket = INVALID_HANDLE_VALUE;
+
+void CloseZenzSocket(ZenzSocketHandle handle) {
+  ::CloseHandle(handle);
+}
+
 std::wstring Utf8ToWidePipeName(const std::string& s) {
   if (s.empty()) {
     return L"";
@@ -80,7 +97,7 @@ std::wstring RedactedStatsWide(const wchar_t* label, size_t bytes) {
   return output;
 }
 
-HANDLE TryOpenPipeOnce(const std::wstring& pipe_name) {
+ZenzSocketHandle TryOpenPipeOnce(const std::wstring& pipe_name) {
   return ::CreateFileW(
       pipe_name.c_str(),
       GENERIC_READ | GENERIC_WRITE,
@@ -117,13 +134,10 @@ std::wstring JoinPath(const std::wstring& dir, const std::wstring& file) {
   return dir + L"\\" + file;
 }
 
-bool LaunchZenzScorerIfNeeded() {
-  // Do not make scorer launch a one-shot decision.  The scorer process may be
-  // killed independently from mozc_server.exe during development, upgrade, or
-  // crash recovery.  Throttle only very recent launch attempts to avoid spawning
-  // many scorer processes while the pipe is still being created.
-  static std::atomic<DWORD> last_launch_tick{0};
+}  // namespace
 
+bool LaunchZenzScorerIfNeeded() {
+  static std::atomic<DWORD> last_launch_tick{0};
   constexpr DWORD kLaunchThrottleMsec = 2000;
 
   const DWORD now = ::GetTickCount();
@@ -195,16 +209,18 @@ bool LaunchZenzScorerIfNeeded() {
   return true;
 }
 
-HANDLE OpenPipeWithAutoLaunch(const std::wstring& pipe_name,
-                              uint32_t timeout_msec) {
+namespace {
+
+ZenzSocketHandle OpenPipeWithAutoLaunch(const std::wstring& pipe_name,
+                                        uint32_t timeout_msec) {
   ZenzPipeDebugOutput(
       std::wstring(L"CreateFileW begin ")
           .append(RedactedStatsWide(
               L"pipe_name", pipe_name.size() * sizeof(wchar_t))));
 
-  HANDLE pipe = TryOpenPipeOnce(pipe_name);
+  ZenzSocketHandle pipe = TryOpenPipeOnce(pipe_name);
 
-  if (pipe != INVALID_HANDLE_VALUE) {
+  if (pipe != kInvalidZenzSocket) {
     ZenzPipeDebugOutput(L"CreateFileW succeeded");
     return pipe;
   }
@@ -214,10 +230,6 @@ HANDLE OpenPipeWithAutoLaunch(const std::wstring& pipe_name,
       std::wstring(L"CreateFileW failed error=")
           .append(std::to_wstring(error)));
 
-  // Cold start path. This function is called from the zenz worker thread, not
-  // the session thread.  It is therefore acceptable to wait briefly here so the
-  // first zenz request is not thrown away only because the scorer process has
-  // not created the pipe yet.
   if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) {
     const bool launched = LaunchZenzScorerIfNeeded();
 
@@ -235,7 +247,7 @@ HANDLE OpenPipeWithAutoLaunch(const std::wstring& pipe_name,
       ::Sleep(kColdStartRetryMsec);
 
       pipe = TryOpenPipeOnce(pipe_name);
-      if (pipe != INVALID_HANDLE_VALUE) {
+      if (pipe != kInvalidZenzSocket) {
         ZenzPipeDebugOutput(
             std::wstring(L"CreateFileW succeeded after cold start retry attempt=")
                 .append(std::to_wstring(attempt + 1)));
@@ -247,7 +259,7 @@ HANDLE OpenPipeWithAutoLaunch(const std::wstring& pipe_name,
         ::WaitNamedPipeW(pipe_name.c_str(), kColdStartRetryMsec);
 
         pipe = TryOpenPipeOnce(pipe_name);
-        if (pipe != INVALID_HANDLE_VALUE) {
+        if (pipe != kInvalidZenzSocket) {
           ZenzPipeDebugOutput(
               std::wstring(L"CreateFileW succeeded after cold start busy retry attempt=")
                   .append(std::to_wstring(attempt + 1)));
@@ -267,11 +279,9 @@ HANDLE OpenPipeWithAutoLaunch(const std::wstring& pipe_name,
     ZenzPipeDebugOutput(
         std::wstring(L"CreateFileW cold start retry exhausted budget_msec=")
             .append(std::to_wstring(retry_budget_msec)));
-    return INVALID_HANDLE_VALUE;
+    return kInvalidZenzSocket;
   }
 
-  // If the pipe exists but is busy, wait only briefly. This is not cold start;
-  // it usually means the scorer is processing another request.
   if (error == ERROR_PIPE_BUSY) {
     constexpr int kBusyRetryAttempts = 3;
     constexpr int kBusyRetryMsec = 20;
@@ -285,17 +295,17 @@ HANDLE OpenPipeWithAutoLaunch(const std::wstring& pipe_name,
 
       pipe = TryOpenPipeOnce(pipe_name);
 
-      if (pipe != INVALID_HANDLE_VALUE) {
+      if (pipe != kInvalidZenzSocket) {
         ZenzPipeDebugOutput(L"CreateFileW succeeded after retry");
         return pipe;
       }
     }
   }
 
-  return INVALID_HANDLE_VALUE;
+  return kInvalidZenzSocket;
 }
 
-bool WriteAll(HANDLE handle, const void* data, uint32_t size) {
+bool WriteAll(ZenzSocketHandle handle, const void* data, uint32_t size) {
   const uint8_t* ptr = static_cast<const uint8_t*>(data);
   uint32_t remaining = size;
 
@@ -314,7 +324,7 @@ bool WriteAll(HANDLE handle, const void* data, uint32_t size) {
   return true;
 }
 
-bool ReadAll(HANDLE handle, void* data, uint32_t size) {
+bool ReadAll(ZenzSocketHandle handle, void* data, uint32_t size) {
   uint8_t* ptr = static_cast<uint8_t*>(data);
   uint32_t remaining = size;
 
@@ -333,16 +343,211 @@ bool ReadAll(HANDLE handle, void* data, uint32_t size) {
   return true;
 }
 
-#endif  // _WIN32
+#else
+
+using ZenzSocketHandle = int;
+const ZenzSocketHandle kInvalidZenzSocket = -1;
+
+void CloseZenzSocket(ZenzSocketHandle handle) {
+  if (handle != kInvalidZenzSocket) {
+    ::close(handle);
+  }
+}
+
+ZenzSocketHandle TryOpenPipeOnce(const std::string& pipe_name) {
+  int sock = ::socket(AF_UNIX, SOCK_STREAM, 0);
+  if (sock < 0) {
+    return kInvalidZenzSocket;
+  }
+
+  struct sockaddr_un addr = {};
+  addr.sun_family = AF_UNIX;
+  if (pipe_name.size() >= sizeof(addr.sun_path)) {
+    ::close(sock);
+    return kInvalidZenzSocket;
+  }
+  std::strncpy(addr.sun_path, pipe_name.c_str(), sizeof(addr.sun_path) - 1);
+
+  if (::connect(sock, reinterpret_cast<struct sockaddr*>(&addr),
+                sizeof(addr)) < 0) {
+    ::close(sock);
+    return kInvalidZenzSocket;
+  }
+
+  return sock;
+}
+
+}  // namespace
+
+bool LaunchZenzScorerIfNeeded() {
+  static std::atomic<uint64_t> last_launch_tick{0};
+  constexpr uint64_t kLaunchThrottleMsec = 2000;
+
+  const uint64_t now = absl::ToUnixMillis(absl::Now());
+  uint64_t previous = last_launch_tick.load();
+
+  if (previous != 0 && now - previous < kLaunchThrottleMsec) {
+    return false;
+  }
+
+  while (!last_launch_tick.compare_exchange_weak(previous, now)) {
+    if (previous != 0 && now - previous < kLaunchThrottleMsec) {
+      return false;
+    }
+  }
+
+  char exe_path[4096];
+  ssize_t len = ::readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+  std::string dir = ".";
+  if (len > 0) {
+    exe_path[len] = '\0';
+    std::string path(exe_path);
+    size_t pos = path.find_last_of('/');
+    if (pos != std::string::npos) {
+      dir = path.substr(0, pos);
+    }
+  }
+
+  std::string scorer_path;
+  const char* env_path = getenv("MOZC_TEST_SCORER_PATH");
+  if (env_path != nullptr) {
+    scorer_path = env_path;
+  } else {
+    scorer_path = dir + "/mozc_zenz_scorer";
+  }
+  if (::access(scorer_path.c_str(), X_OK) != 0) {
+    return false;
+  }
+
+  int pipefd[2];
+  if (::pipe2(pipefd, O_CLOEXEC) < 0) {
+    return false;
+  }
+
+  pid_t pid = ::fork();
+  if (pid == 0) {
+    ::close(pipefd[0]);
+
+    pid_t pid2 = ::fork();
+    if (pid2 == 0) {
+      ::setsid();
+      char* argv[] = {const_cast<char*>("mozc_zenz_scorer"), nullptr};
+      ::execve(scorer_path.c_str(), argv, environ);
+      
+      int err = errno;
+      ssize_t written = ::write(pipefd[1], &err, sizeof(err));
+      (void)written;
+      ::_exit(127);
+    }
+    if (pid2 < 0) {
+      int err = errno;
+      ssize_t written = ::write(pipefd[1], &err, sizeof(err));
+      (void)written;
+      ::_exit(1);
+    }
+    ::_exit(0);
+  }
+  
+  ::close(pipefd[1]);
+
+  if (pid > 0) {
+    int status = 0;
+    ::waitpid(pid, &status, 0);
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+      int err = 0;
+      ssize_t n = ::read(pipefd[0], &err, sizeof(err));
+      ::close(pipefd[0]);
+      if (n == 0) {
+        return true;
+      }
+      return false;
+    }
+  }
+  ::close(pipefd[0]);
+  return false;
+}
+
+namespace {
+
+ZenzSocketHandle OpenPipeWithAutoLaunch(const std::string& pipe_name,
+                                        uint32_t timeout_msec) {
+  ZenzSocketHandle pipe = TryOpenPipeOnce(pipe_name);
+  if (pipe != kInvalidZenzSocket) {
+    return pipe;
+  }
+
+  int err = errno;
+  if (err == ENOENT || err == ECONNREFUSED) {
+    LaunchZenzScorerIfNeeded();
+
+    constexpr uint32_t kColdStartRetryMsec = 50;
+    const uint32_t retry_budget_msec =
+        std::max<uint32_t>(timeout_msec, kColdStartRetryMsec);
+    const uint32_t retry_attempts =
+        std::max<uint32_t>(1, retry_budget_msec / kColdStartRetryMsec);
+
+    for (uint32_t attempt = 0; attempt < retry_attempts; ++attempt) {
+      absl::SleepFor(absl::Milliseconds(kColdStartRetryMsec));
+
+      pipe = TryOpenPipeOnce(pipe_name);
+      if (pipe != kInvalidZenzSocket) {
+        return pipe;
+      }
+    }
+  }
+
+  return kInvalidZenzSocket;
+}
+
+bool WriteAll(ZenzSocketHandle handle, const void* data, uint32_t size) {
+#if defined(__APPLE__)
+  constexpr int kSendFlags = 0;
+#else
+  constexpr int kSendFlags = MSG_NOSIGNAL;
+#endif
+  const uint8_t* ptr = static_cast<const uint8_t*>(data);
+  uint32_t remaining = size;
+
+  while (remaining > 0) {
+    ssize_t written = ::send(handle, ptr, remaining, kSendFlags);
+    if (written <= 0) {
+      if (errno == EINTR) {
+        continue;
+      }
+      return false;
+    }
+    ptr += written;
+    remaining -= written;
+  }
+
+  return true;
+}
+
+bool ReadAll(ZenzSocketHandle handle, void* data, uint32_t size) {
+  uint8_t* ptr = static_cast<uint8_t*>(data);
+  uint32_t remaining = size;
+
+  while (remaining > 0) {
+    ssize_t read_bytes = ::recv(handle, ptr, remaining, 0);
+    if (read_bytes <= 0) {
+      if (errno == EINTR) {
+        continue;
+      }
+      return false;
+    }
+    ptr += read_bytes;
+    remaining -= read_bytes;
+  }
+
+  return true;
+}
+
+#endif
 
 }  // namespace
 
 bool ZenzNamedPipeClient::IsAvailable() const {
-#if defined(_WIN32)
   return true;
-#else
-  return false;
-#endif
 }
 
 ZenzLiveResponse ZenzNamedPipeClient::Convert(
@@ -363,23 +568,52 @@ ZenzLiveResponse ZenzNamedPipeClient::Convert(
           .append(std::to_wstring(request.timeout_msec)));
 #endif
 
-#if !defined(_WIN32)
-  response.ok = false;
-  response.debug = "named_pipe_only_supported_on_windows";
-  return response;
-#else
   const absl::Time start = absl::Now();
 
+#if defined(_WIN32)
   const std::wstring pipe_name = Utf8ToWidePipeName(request.pipe_name);
   if (pipe_name.empty()) {
     response.ok = false;
     response.debug = "invalid_pipe_name";
     return response;
   }
+#else
+  std::string pipe_name = request.pipe_name;
+  if (pipe_name.empty() || pipe_name.rfind("\\\\.\\pipe\\", 0) == 0) {
+    pipe_name = std::string(getenv("HOME") ? getenv("HOME") : "/tmp") + "/.mozc_zenz_scorer_pipe";
+  } else {
+    bool safe = false;
+    if (pipe_name.find("..") == std::string::npos && pipe_name[0] == '/') {
+      const char* home = getenv("HOME");
+      if (home != nullptr && home[0] != '\0') {
+        std::string home_prefix = std::string(home) + "/";
+        if (pipe_name.rfind(home_prefix, 0) == 0) {
+          safe = true;
+        }
+      }
+      if (!safe && pipe_name.rfind("/tmp/", 0) == 0) {
+        safe = true;
+      }
+    }
+    if (!safe) {
+      response.ok = false;
+      response.debug = "invalid_pipe_name_traversal";
+      return response;
+    }
+  }
+#endif
 
-  HANDLE pipe = OpenPipeWithAutoLaunch(pipe_name, request.timeout_msec);
+  ZenzSocketHandle pipe = OpenPipeWithAutoLaunch(pipe_name, request.timeout_msec);
 
-  if (pipe == INVALID_HANDLE_VALUE) {
+  if (pipe != kInvalidZenzSocket) {
+    struct timeval tv;
+    tv.tv_sec = request.timeout_msec / 1000;
+    tv.tv_usec = (request.timeout_msec % 1000) * 1000;
+    ::setsockopt(pipe, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    ::setsockopt(pipe, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+  }
+
+  if (pipe == kInvalidZenzSocket) {
     response.ok = false;
     response.debug = "pipe_open_failed";
     return response;
@@ -401,7 +635,7 @@ ZenzLiveResponse ZenzNamedPipeClient::Convert(
   }
 
   if (!ok) {
-    ::CloseHandle(pipe);
+    CloseZenzSocket(pipe);
     response.ok = false;
     response.debug = "pipe_write_failed";
     return response;
@@ -410,7 +644,7 @@ ZenzLiveResponse ZenzNamedPipeClient::Convert(
   ZenzWireResponseHeader response_header = {};
   ok = ReadAll(pipe, &response_header, sizeof(response_header));
   if (!ok) {
-    ::CloseHandle(pipe);
+    CloseZenzSocket(pipe);
     response.ok = false;
     response.debug = "pipe_read_header_failed";
     return response;
@@ -420,7 +654,7 @@ ZenzLiveResponse ZenzNamedPipeClient::Convert(
       response_header.version != kZenzWireVersion ||
       response_header.kind != kZenzWireKindResponse ||
       response_header.generation != request.generation) {
-    ::CloseHandle(pipe);
+    CloseZenzSocket(pipe);
     response.ok = false;
     response.debug = "pipe_response_header_invalid";
     return response;
@@ -436,7 +670,7 @@ ZenzLiveResponse ZenzNamedPipeClient::Convert(
     ok = ReadAll(pipe, debug.data(), response_header.debug_size);
   }
 
-  ::CloseHandle(pipe);
+  CloseZenzSocket(pipe);
 
   if (!ok) {
     response.ok = false;
@@ -444,7 +678,7 @@ ZenzLiveResponse ZenzNamedPipeClient::Convert(
     return response;
   }
 
-  #if defined(_WIN32)
+#if defined(_WIN32)
   ZenzPipeDebugOutput(
       std::wstring(L"Convert response status=")
           .append(std::to_wstring(response_header.status))
@@ -462,7 +696,6 @@ ZenzLiveResponse ZenzNamedPipeClient::Convert(
   response.debug = std::move(debug);
   response.latency = absl::Now() - start;
   return response;
-#endif  // _WIN32
 }
 
 }  // namespace session

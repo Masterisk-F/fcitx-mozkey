@@ -6,6 +6,8 @@
 
 #include "testing/gunit.h"
 
+#include "base/system_util.h"
+
 #if defined(_WIN32)
 #include <windows.h>
 #endif
@@ -96,8 +98,20 @@ class ScopedUserProfileForZenzFeedbackStoreTest {
     return JoinPath(mozc_dir, L"zenz_feedback.tsv");
   }
 
+  // For direct std::ofstream access (std::ofstream accepts std::wstring on Win32).
+  const std::wstring& feedback_wide_path() const { return feedback_path(); }
+  // For direct std::ofstream access on Linux.
+  std::string feedback_utf8_path() const {
+    return WideToUtf8(feedback_path());
+  }
+
   std::wstring temp_file_path(const std::wstring& name) const {
     return JoinPath(profile_dir_, name);
+  }
+
+  // UTF-8 path for std::ofstream on Linux.
+  std::string temp_file_utf8_path(const std::wstring& name) const {
+    return WideToUtf8(JoinPath(profile_dir_, name));
   }
 
  private:
@@ -106,6 +120,72 @@ class ScopedUserProfileForZenzFeedbackStoreTest {
   std::wstring old_profile_;
   std::wstring profile_dir_;
 };
+
+#else  // !defined(_WIN32)
+
+class ScopedUserProfileForZenzFeedbackStoreTest {
+ public:
+  ScopedUserProfileForZenzFeedbackStoreTest() {
+    // Save current Mozc user profile directory.
+    old_profile_ = SystemUtil::GetUserProfileDirectory();
+    has_old_profile_ = true;
+
+    // Create a temporary directory.
+    const std::string tmp_template =
+        std::string("/tmp/mozc_zenz_feedback_store_test_XXXXXX");
+    char* tmp_buf = strdup(tmp_template.c_str());
+    char* result = mkdtemp(tmp_buf);
+    if (result == nullptr) {
+      free(tmp_buf);
+      return;
+    }
+    profile_dir_ = std::string(result);
+    free(tmp_buf);
+
+    SystemUtil::SetUserProfileDirectory(profile_dir_);
+    ok_ = true;
+  }
+
+  ~ScopedUserProfileForZenzFeedbackStoreTest() {
+    // Restore original profile directory.
+    if (has_old_profile_) {
+      SystemUtil::SetUserProfileDirectory(old_profile_);
+    }
+
+    // Clean up the feedback file and directory.
+    unlink(feedback_utf8_path().c_str());
+    rmdir(profile_dir_.c_str());
+  }
+
+  bool ok() const { return ok_; }
+
+  std::wstring feedback_path() const {
+    return Utf8ToWide(profile_dir_ + "/zenz_feedback.tsv");
+  }
+
+  std::string feedback_utf8_path() const {
+    return profile_dir_ + "/zenz_feedback.tsv";
+  }
+
+  std::wstring temp_file_path(const std::wstring& name) const {
+    std::string name_utf8 = WideToUtf8(name);
+    std::string full_utf8 = profile_dir_ + "/" + name_utf8;
+    return Utf8ToWide(full_utf8);
+  }
+
+  std::string temp_file_utf8_path(const std::wstring& name) const {
+    std::string name_utf8 = WideToUtf8(name);
+    return profile_dir_ + "/" + name_utf8;
+  }
+
+ private:
+  bool ok_ = false;
+  bool has_old_profile_ = false;
+  std::string old_profile_;
+  std::string profile_dir_;
+};
+
+#endif  // defined(_WIN32)
 
 TEST(ZenzFeedbackStoreTest, GetAcceptedCandidatesAllowsSingleAcceptedAndSorts) {
   ScopedUserProfileForZenzFeedbackStoreTest profile;
@@ -275,13 +355,13 @@ TEST(ZenzFeedbackStoreTest, GetAcceptedCandidatesAcceptsUtf8Bom) {
 
   ZenzFeedbackStore store;
 
-  // Create %USERPROFILE%\AppData\LocalLow\Mozc first.  This test intentionally
+  // Create the Mozc directory first.  This test intentionally
   // overwrites the TSV directly to simulate a file saved by tools/editors that
   // write UTF-8 with BOM.
   store.RecordAccepted("__mkdir__", "empty", "__mkdir__");
 
   {
-    std::ofstream file(profile.feedback_path(),
+    std::ofstream file(profile.feedback_utf8_path(),
                        std::ios::binary | std::ios::trunc);
     ASSERT_TRUE(file);
     file << "\xEF\xBB\xBF"
@@ -412,7 +492,7 @@ TEST(ZenzFeedbackStoreTest, ClearAllRemovesAllEntries) {
   EXPECT_TRUE(store.ClearAll());
   EXPECT_TRUE(store.ListEntries().empty());
 
-  std::ifstream file(profile.feedback_path(), std::ios::binary);
+  std::ifstream file(profile.feedback_utf8_path(), std::ios::binary);
   EXPECT_FALSE(file);
 }
 
@@ -455,7 +535,8 @@ TEST(ZenzFeedbackStoreTest, ImportAppendKeepsExistingRecords) {
 
   const std::wstring import_path = profile.temp_file_path(L"import_append.tsv");
   {
-    std::ofstream file(import_path, std::ios::binary | std::ios::trunc);
+    std::ofstream file(profile.temp_file_utf8_path(L"import_append.tsv"),
+                       std::ios::binary | std::ios::trunc);
     ASSERT_TRUE(file);
     file << "v2\taccepted\timported\tempty\t追加\t\n";
   }
@@ -483,7 +564,8 @@ TEST(ZenzFeedbackStoreTest, ImportRejectsMalformedFileWithoutChangingExisting) {
   const std::wstring import_path =
       profile.temp_file_path(L"import_malformed.tsv");
   {
-    std::ofstream file(import_path, std::ios::binary | std::ios::trunc);
+    std::ofstream file(profile.temp_file_utf8_path(L"import_malformed.tsv"),
+                       std::ios::binary | std::ios::trunc);
     ASSERT_TRUE(file);
     file << "v2\tunknown_action\tk\tempty\tv\t\n";
   }
@@ -501,13 +583,40 @@ TEST(ZenzFeedbackStoreTest, ImportRejectsMalformedFileWithoutChangingExisting) {
   EXPECT_EQ(entries[0].rejected_count, 0);
 }
 
-#else  // defined(_WIN32)
+TEST(ZenzFeedbackStoreTest, WideToUtf8EdgeCases) {
+  // Test basic ASCII
+  EXPECT_EQ(WideToUtf8(L"hello"), "hello");
+  
+  // Test Japanese characters
+  EXPECT_EQ(WideToUtf8(L"日本語"), "日本語");
+  
+  // Test surrogate pairs/U+10FFFF range
+  std::wstring emoji = L"𡈽";
+  EXPECT_EQ(WideToUtf8(emoji), "𡈽");
 
-TEST(ZenzFeedbackStoreTest, SkippedOnNonWindows) {
-  GTEST_SKIP() << "ZenzFeedbackStore persists to LocalLow on Windows.";
+#ifndef _WIN32
+  // Invalid UTF-32 is handled gracefully by simdutf (returns empty string)
+  std::wstring invalid_wide = L"abc";
+  invalid_wide.push_back(static_cast<wchar_t>(0xD800)); // surrogate
+  invalid_wide.append(L"def");
+  std::string result = WideToUtf8(invalid_wide);
+  EXPECT_EQ(result, "");
+#endif
 }
 
-#endif  // defined(_WIN32)
+TEST(ZenzFeedbackStoreTest, IsValidUtf8ForFeedback) {
+  // Valid UTF-8
+  EXPECT_TRUE(IsValidUtf8ForFeedback(""));
+  EXPECT_TRUE(IsValidUtf8ForFeedback("hello"));
+  EXPECT_TRUE(IsValidUtf8ForFeedback("日本語"));
+  EXPECT_TRUE(IsValidUtf8ForFeedback("𡈽"));
+
+  // Invalid UTF-8
+  EXPECT_FALSE(IsValidUtf8ForFeedback("\xFF"));
+  EXPECT_FALSE(IsValidUtf8ForFeedback("\xC0\x80")); // Overlong NUL
+  EXPECT_FALSE(IsValidUtf8ForFeedback("\xED\xA0\x80")); // Surrogate pair U+D800
+  EXPECT_FALSE(IsValidUtf8ForFeedback("\xF4\x90\x80\x80")); // Out of range (> 0x10FFFF)
+}
 
 }  // namespace
 }  // namespace session
