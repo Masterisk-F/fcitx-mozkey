@@ -398,6 +398,50 @@ bool MozcResponseParser::ParseResponse(const mozc::commands::Output& response,
     return false;
   }
 
+  // Handle RECONVERT_SELECTION_OR_INSERT_SPACE before any fallback output (e.g. InsertSpace)
+  // is applied to the context. If there is selected text, we discard the current fallback
+  // output, convert it to a CONVERT_REVERSE command, and parse the new response.
+  if (response.has_callback() && response.callback().has_session_command() &&
+      response.callback().session_command().type() ==
+          mozc::commands::SessionCommand::RECONVERT_SELECTION_OR_INSERT_SPACE) {
+    SurroundingTextInfo info;
+    if (!GetSurroundingText(ic, &info, engine_->clipboardAddon())) {
+      // Do not apply the fallback output when the selected text state is
+      // unknown. Otherwise selected application text may be replaced with a
+      // space. Consume the key and return true.
+      return true;
+    }
+
+    if (!info.selection_text.empty()) {
+      mozc::commands::SessionCommand reconvert_command;
+      reconvert_command.set_type(mozc::commands::SessionCommand::CONVERT_REVERSE);
+      reconvert_command.set_text(info.selection_text);
+
+      mozc::commands::Output new_output;
+      if (!mozc_state->SendCommand(reconvert_command, &new_output)) {
+        return true;
+      }
+
+      if (new_output.has_callback() && new_output.callback().has_session_command() &&
+          new_output.callback().session_command().has_type()) {
+        // Do not allow recursive callbacks.
+        return true;
+      }
+
+      // We need to remove selected text as a first step of reconversion.
+      mozc::commands::DeletionRange* range = new_output.mutable_deletion_range();
+      const int32_t offset = info.relative_selected_length > 0
+                                 ? -info.relative_selected_length
+                                 : 0;
+      range->set_offset(offset);
+      range->set_length(abs(info.relative_selected_length));
+
+      MOZC_VLOG(1) << "New output for RECONVERT_SELECTION_OR_INSERT_SPACE: "
+                   << new_output.DebugString();
+      return ParseResponse(new_output, ic);
+    }
+  }
+
   if (response.has_result()) {
     const mozc::commands::Result& result = response.result();
     ParseResult(result, ic);
