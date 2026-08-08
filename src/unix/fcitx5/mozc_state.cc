@@ -351,6 +351,12 @@ void MozcState::FocusOut(const InputContextEvent& event) {
 }
 
 bool MozcState::ParseResponse(const mozc::commands::Output& raw_response) {
+  if (parsing_) {
+    MOZC_VLOG(1) << "Re-entrant ParseResponse; dropping response.";
+    return true;
+  }
+  parsing_ = true;
+
   auto oldMode = composition_mode_;
   ClearAll();
   const bool consumed = engine_->parser()->ParseResponse(raw_response, ic_);
@@ -363,6 +369,8 @@ bool MozcState::ParseResponse(const mozc::commands::Output& raw_response) {
       !ic_->inputPanel().candidateList()) {
     engine_->instance()->showInputMethodInformation(ic_);
   }
+
+  parsing_ = false;
   return consumed;
 }
 

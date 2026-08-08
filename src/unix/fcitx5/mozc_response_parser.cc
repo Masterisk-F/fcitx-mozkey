@@ -344,7 +344,14 @@ void MozcResponseParser::ExecuteCallback(const mozc::commands::Output& response,
       mozc_state->ScheduleLiveConversion(session_command, delay);
       return;
     }
+    case mozc::commands::SessionCommand::RECONVERT_SELECTION_OR_INSERT_SPACE:
+      // Handled inline in ParseResponse() before ExecuteCallback().
+      // Reaching here means the fallback output is being applied.
+      // Must return, not break, to prevent sending the callback to the server.
+      return;
     default:
+      LOG(WARNING) << "Unhandled callback type: "
+                   << static_cast<int>(callback_command.type());
       return;
   }
 
@@ -405,31 +412,30 @@ bool MozcResponseParser::ParseResponse(const mozc::commands::Output& response,
       response.callback().session_command().type() ==
           mozc::commands::SessionCommand::RECONVERT_SELECTION_OR_INSERT_SPACE) {
     SurroundingTextInfo info;
-    if (!GetSurroundingText(ic, &info, engine_->clipboardAddon())) {
-      // Do not apply the fallback output when the selected text state is
-      // unknown. Otherwise selected application text may be replaced with a
-      // space. Consume the key and return true.
-      return true;
-    }
-
-    if (!info.selection_text.empty()) {
+    if (GetSurroundingText(ic, &info, engine_->clipboardAddon()) &&
+        !info.selection_text.empty()) {
       mozc::commands::SessionCommand reconvert_command;
-      reconvert_command.set_type(mozc::commands::SessionCommand::CONVERT_REVERSE);
+      reconvert_command.set_type(
+          mozc::commands::SessionCommand::CONVERT_REVERSE);
       reconvert_command.set_text(info.selection_text);
 
       mozc::commands::Output new_output;
       if (!mozc_state->SendCommand(reconvert_command, &new_output)) {
+        LOG(ERROR) << "SendCommand failed for "
+                      "RECONVERT_SELECTION_OR_INSERT_SPACE";
         return true;
       }
 
-      if (new_output.has_callback() && new_output.callback().has_session_command() &&
+      if (new_output.has_callback() &&
+          new_output.callback().has_session_command() &&
           new_output.callback().session_command().has_type()) {
         // Do not allow recursive callbacks.
         return true;
       }
 
       // We need to remove selected text as a first step of reconversion.
-      mozc::commands::DeletionRange* range = new_output.mutable_deletion_range();
+      mozc::commands::DeletionRange* range =
+          new_output.mutable_deletion_range();
       const int32_t offset = info.relative_selected_length > 0
                                  ? -info.relative_selected_length
                                  : 0;
@@ -440,6 +446,9 @@ bool MozcResponseParser::ParseResponse(const mozc::commands::Output& response,
                    << new_output.DebugString();
       return ParseResponse(new_output, ic);
     }
+    // If GetSurroundingText fails or there is no selected text, fall through
+    // and apply the server-generated fallback output (e.g. InsertSpace).
+    // This matches the upstream Windows TSF behavior (a58f787fc).
   }
 
   if (response.has_result()) {
