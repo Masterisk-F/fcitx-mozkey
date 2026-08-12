@@ -19,6 +19,12 @@ namespace {
 mozc::commands::SessionCommand g_last_scheduled_command;
 uint32_t g_last_scheduled_delay = 0;
 bool g_schedule_live_conversion_called = false;
+
+mozc::commands::SessionCommand g_last_send_command;
+bool g_send_command_result = true;
+bool g_use_custom_send_response = false;
+mozc::commands::Output g_custom_send_response;
+std::string g_last_result_string;
 }
 
 namespace fcitx {
@@ -56,7 +62,11 @@ void MozcState::SelectCandidate(int idx) {}
 
 bool MozcState::SendCommand(const mozc::commands::SessionCommand& session_command,
                             mozc::commands::Output* new_output) {
-  return true;
+  g_last_send_command = session_command;
+  if (g_use_custom_send_response) {
+    *new_output = g_custom_send_response;
+  }
+  return g_send_command_result;
 }
 
 void MozcState::SetAuxString(const std::string& str) {}
@@ -65,7 +75,9 @@ void MozcState::SetCompositionMode(mozc::commands::CompositionMode mode, bool up
 
 void MozcState::SetPreeditInfo(Text preedit_info) {}
 
-void MozcState::SetResultString(const std::string& result_string) {}
+void MozcState::SetResultString(const std::string& result_string) {
+  g_last_result_string = result_string;
+}
 
 void MozcState::SetUrl(const std::string& url) {}
 
@@ -90,12 +102,29 @@ namespace mozc {
 namespace fcitx_test {
 namespace {
 
+class TestInputContext : public fcitx::InputContext {
+ public:
+  using fcitx::InputContext::InputContext;
+  ~TestInputContext() override { destroy(); }
+  const char* frontend() const override { return "test"; }
+  void commitStringImpl(const std::string&) override {}
+  void deleteSurroundingTextImpl(int, unsigned int) override {}
+  void forwardKeyImpl(const fcitx::ForwardKeyEvent&) override {}
+  void updatePreeditImpl() override {}
+};
+
 class MozcResponseParserTest : public testing::Test {
  protected:
   void SetUp() override {
     g_schedule_live_conversion_called = false;
     g_last_scheduled_command.Clear();
     g_last_scheduled_delay = 0;
+
+    g_last_send_command.Clear();
+    g_send_command_result = true;
+    g_use_custom_send_response = false;
+    g_custom_send_response.Clear();
+    g_last_result_string.clear();
   }
 };
 
@@ -128,6 +157,119 @@ TEST_F(MozcResponseParserTest, ApplyZenzLiveCorrectionTest) {
   EXPECT_EQ(g_last_scheduled_command.live_conversion_generation(), 42);
   EXPECT_EQ(g_last_scheduled_command.live_conversion_key(), "zenz");
   EXPECT_EQ(g_last_scheduled_delay, 1234);
+}
+
+TEST_F(MozcResponseParserTest, ReconvertSelection_HappyPath) {
+  fcitx::MozcEngine engine(nullptr);
+  fcitx::MozcResponseParser parser(&engine);
+
+  fcitx::InputContextManager manager;
+  TestInputContext ic(manager, "test");
+  ic.setCapabilityFlags(fcitx::CapabilityFlags{fcitx::CapabilityFlag::SurroundingText});
+  ic.surroundingText().setText("hello world", 6, 11);  // selected "world"
+
+  g_use_custom_send_response = true;
+  g_custom_send_response.set_consumed(true);
+  g_custom_send_response.mutable_result()->set_type(commands::Result::STRING);
+  g_custom_send_response.mutable_result()->set_value("reconverted");
+
+  commands::Output output;
+  output.set_consumed(true);
+  output.mutable_callback()->mutable_session_command()->set_type(
+      commands::SessionCommand::RECONVERT_SELECTION_OR_INSERT_SPACE);
+
+  EXPECT_TRUE(parser.ParseResponse(output, &ic));
+  EXPECT_EQ(g_last_send_command.type(), commands::SessionCommand::CONVERT_REVERSE);
+  EXPECT_EQ(g_last_send_command.text(), "world");
+  EXPECT_EQ(g_last_result_string, "reconverted");
+}
+
+TEST_F(MozcResponseParserTest, ReconvertSelection_EmptySelection) {
+  fcitx::MozcEngine engine(nullptr);
+  fcitx::MozcResponseParser parser(&engine);
+
+  fcitx::InputContextManager manager;
+  TestInputContext ic(manager, "test");
+  ic.setCapabilityFlags(fcitx::CapabilityFlags{fcitx::CapabilityFlag::SurroundingText});
+  ic.surroundingText().setText("hello world", 5, 5);  // empty selection
+
+  commands::Output output;
+  output.set_consumed(true);
+  output.mutable_callback()->mutable_session_command()->set_type(
+      commands::SessionCommand::RECONVERT_SELECTION_OR_INSERT_SPACE);
+  output.mutable_result()->set_type(commands::Result::STRING);
+  output.mutable_result()->set_value("fallback space");
+
+  EXPECT_TRUE(parser.ParseResponse(output, &ic));
+  EXPECT_FALSE(g_last_send_command.has_type());
+  EXPECT_EQ(g_last_result_string, "fallback space");
+}
+
+TEST_F(MozcResponseParserTest, ReconvertSelection_GetSurroundingTextFailure) {
+  fcitx::MozcEngine engine(nullptr);
+  fcitx::MozcResponseParser parser(&engine);
+
+  fcitx::InputContextManager manager;
+  TestInputContext ic(manager, "test");
+  // Do not set SurroundingText capability so GetSurroundingText fails.
+
+  commands::Output output;
+  output.set_consumed(true);
+  output.mutable_callback()->mutable_session_command()->set_type(
+      commands::SessionCommand::RECONVERT_SELECTION_OR_INSERT_SPACE);
+  output.mutable_result()->set_type(commands::Result::STRING);
+  output.mutable_result()->set_value("fallback space");
+
+  EXPECT_TRUE(parser.ParseResponse(output, &ic));
+  EXPECT_FALSE(g_last_send_command.has_type());
+  EXPECT_EQ(g_last_result_string, "fallback space");
+}
+
+TEST_F(MozcResponseParserTest, ReconvertSelection_SendCommandFailure) {
+  fcitx::MozcEngine engine(nullptr);
+  fcitx::MozcResponseParser parser(&engine);
+
+  fcitx::InputContextManager manager;
+  TestInputContext ic(manager, "test");
+  ic.setCapabilityFlags(fcitx::CapabilityFlags{fcitx::CapabilityFlag::SurroundingText});
+  ic.surroundingText().setText("hello world", 6, 11);  // selected "world"
+
+  g_send_command_result = false;
+
+  commands::Output output;
+  output.set_consumed(true);
+  output.mutable_callback()->mutable_session_command()->set_type(
+      commands::SessionCommand::RECONVERT_SELECTION_OR_INSERT_SPACE);
+
+  EXPECT_TRUE(parser.ParseResponse(output, &ic));
+  EXPECT_EQ(g_last_send_command.type(), commands::SessionCommand::CONVERT_REVERSE);
+  EXPECT_EQ(g_last_send_command.text(), "world");
+}
+
+TEST_F(MozcResponseParserTest, ReconvertSelection_RecursiveCallbackGuard) {
+  fcitx::MozcEngine engine(nullptr);
+  fcitx::MozcResponseParser parser(&engine);
+
+  fcitx::InputContextManager manager;
+  TestInputContext ic(manager, "test");
+  ic.setCapabilityFlags(fcitx::CapabilityFlags{fcitx::CapabilityFlag::SurroundingText});
+  ic.surroundingText().setText("hello world", 6, 11);  // selected "world"
+
+  g_use_custom_send_response = true;
+  g_custom_send_response.set_consumed(true);
+  g_custom_send_response.mutable_callback()->mutable_session_command()->set_type(
+      commands::SessionCommand::RECONVERT_SELECTION_OR_INSERT_SPACE);
+  g_custom_send_response.mutable_result()->set_type(commands::Result::STRING);
+  g_custom_send_response.mutable_result()->set_value("should not apply");
+
+  commands::Output output;
+  output.set_consumed(true);
+  output.mutable_callback()->mutable_session_command()->set_type(
+      commands::SessionCommand::RECONVERT_SELECTION_OR_INSERT_SPACE);
+
+  EXPECT_TRUE(parser.ParseResponse(output, &ic));
+  EXPECT_EQ(g_last_send_command.type(), commands::SessionCommand::CONVERT_REVERSE);
+  EXPECT_TRUE(g_last_result_string.empty());  // recursion was blocked
 }
 
 }  // namespace

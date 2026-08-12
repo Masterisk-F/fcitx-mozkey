@@ -166,6 +166,10 @@ class MozcState : public InputContextProperty {
   std::string title_;
 
   mutable std::unique_ptr<fcitx::EventSourceTime> live_conversion_timer_;
+
+  // Guards against re-entrant ParseResponse() calls (e.g. from the
+  // live-conversion timer firing while a response is still being parsed).
+  bool parsing_ = false;
 };
 
 }  // namespace fcitx
