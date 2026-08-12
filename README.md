@@ -108,9 +108,12 @@ fcitx5-configtool
 - 単打確定の対象を設定画面のチェックボックスで選択可能
 - 句読点変換と句読点・記号の単打確定は排他的に動作
 - 変換確定直後に Backspace や Cancel キーで取り消した場合のユーザー履歴学習の扱いを改善
-- 句読点・記号の単打確定でも、直前の通常変換確定による学習を次の実テキスト入力まで保留し、Backspace / Escape / Revert / Reset / Undo / IME off などで取り消せるようにした
+- 変換中に Esc / Ctrl+Z などのキャンセル操作でひらがなへ戻し、そのまま Enter または句読点・記号の単打確定で確定した場合、F6 ひらがな化確定に近い表記選好として学習されるようにした
+- 複数文節の変換キャンセル後は、キャンセル直前の文節境界を可能な限り保持し、全体 1 件としてではなく文節単位のひらがな表記選好としてユーザーセグメント履歴へ反映
+- 句読点・記号の単打確定でも、直前の通常変換確定による学習を次の実テキスト入力まで保留し、Backspace / Escape / Ctrl+Z などの Cancel 相当キー / Revert / Reset / Undo などでは取り消し、IMEOff / MakeSureIMEOff では確定扱いにするようにした
 - ライブ変換機能を追加。未確定文字列を自動変換し、確定前の読みをルビ風 overlay で表示
 - ライブ変換は設定画面から ON/OFF、変換開始までの遅延時間、変換開始の最小文字数を変更可能
+- ライブ変換を使わない場合も、既定で初回の変換操作で第1候補のまま候補ウィンドウを開ける（設定で無効化可能）
 - ライブ変換は入力直後の不要な変換ちらつきを抑えるため、文字入力後に短いデバウンスを挟んで実行
 - デフォルトでは 1 文字だけの未確定文字列で、助詞などの誤変換を避けるためライブ変換を実行しない
 - `え~`、`えー`、`ん？` のような「かな1文字 + 装飾的な末尾記号」でも、短すぎる漢字化を避けるためライブ変換を抑制
@@ -122,11 +125,11 @@ fcitx5-configtool
 - Windows 版で左 Shift / 右 Shift / 左 Ctrl / 右 Ctrl を個別キーとして設定画面から割り当て可能
 - Windows 版で IMEOn / IMEOff に割り当てたキーを押した場合、すでに同じ状態でも IME モードインジケータを表示
 - Windows 版の設定画面から、Mozkey を Windows の既定 IME として明示的に設定し、変更前の既定 IME 設定へ戻せるボタンを追加
-- Windows 版の候補ウィンドウ/ルビ表示にダークモード切り替えを追加
+- Windows 版の候補ウィンドウ・サジェストウィンドウ・ライブ変換中のルビ表示について、ライト / ダーク / カスタム配色、サイズ、角丸、透明度、影を設定画面から個別に調整可能
+- サジェストウィンドウとルビ表示は、候補ウィンドウの配色に追従するか、個別のテーマ・カスタム配色を使うかを選択可能
 - Windows 版の候補ウィンドウ・用例ウィンドウ・ライブ変換中のルビ表示に使うフォントを設定画面から変更可能
 - ライブ変換中のルビ表示を設定画面から ON/OFF 可能
 - Windows 版で未確定文字の文字色・背景色・下線色を設定画面からカスタマイズ可能
-- Windows 版の候補ウィンドウや IME 切り替えインジケータの配色・余白・角丸などの見た目を調整
 - Windows 版の IME 切り替えインジケータが、Windows のライト / ダークテーマに合わせて表示されるように改善
 - system dictionary 強化用の追加辞書生成パイプラインを追加
 - merge-ut-dictionaries 由来の地名・SudachiDict 系語彙を system dictionary に取り込めるようにした
@@ -142,13 +145,14 @@ fcitx5-configtool
 - Zenz 補正開始の最小文字数を設定画面から変更可能
 - Zenz 補正結果のローカル feedback learning を追加。設定画面から ON/OFF 可能
 - Zenz feedback は、Zenz 補正結果が表示されただけでは保存されません。Enter や句読点・記号の単打確定などで表示中の Zenz 結果が明示的に確定された場合だけ、accepted feedback の候補として保留されます。
-- 保留された accepted feedback は、次の実テキスト入力まで Backspace / Escape / Revert / Undo / IME off などで取り消されなかった場合にローカル TSV へ保存
-- Zenz 補正表示後に Space や候補移動など通常変換操作へ移った場合、その Zenz 候補は rejected feedback として扱う
+- 保留された accepted feedback は、次の実テキスト入力まで Backspace / Escape / Revert / Undo などで取り消されなかった場合にローカル TSV へ保存。IMEOff / MakeSureIMEOff は取り消しではなく確定後のモード変更として扱う
+- Zenz 補正表示後に Space や候補移動など通常変換操作へ移った場合、その Zenz 候補は rejected feedback として扱う。ただし Space などの通常操作による rejected feedback は候補を殺す hard reject ではなく、順位調整用の弱い negative signal として扱う
+- Zenz 補正表示中に Space で Mozc 通常変換結果へ戻した場合は、次の文字入力で戻した変換結果を確定してから新しい入力を開始
 - Zenz 学習データを設定画面から安全に管理できる UI を追加。TSV を直接編集せず、検索、インポート、エクスポート、選択項目削除、全削除が可能
-- Zenz accepted feedback を通常変換候補の promotion に利用。1 文節の通常変換では、保存済み accepted feedback が既存候補にあれば先頭へ昇格し、候補にない場合は synthetic candidate として追加
-- 文節境界を壊さないため、複数文節に分かれた通常変換では Zenz feedback promotion を行わない
+- Zenz feedback を通常変換候補の ranking に利用。1 文節の通常変換では、保存済み feedback を score 化し、既存候補があれば cost を調整し、候補にない場合は synthetic candidate として候補集合の自然な位置へ追加。accepted feedback は順位を上げ、通常操作由来の rejected feedback は候補を除外せず順位を下げる
+- 文節境界を壊さないため、複数文節に分かれた通常変換では Zenz feedback による通常候補 ranking を行わない
 - 複数文節に分かれるライブ変換では、全文補正の学習を保つため、accepted Zenz feedback を session-level live correction fast path として再利用
-- sensitive-like context で得られた feedback は、通常文脈の候補 promotion には使わない
+- sensitive-like context で得られた feedback は、通常文脈の候補 ranking / reuse には使わない
 - accepted として確定した Zenz 候補は、条件を満たす場合は Mozc の user history にも外部変換結果として学習
 - Zenz prompt に使う左文脈は sanitizer を通し、URL、email、file path、token、長い数字列など sensitive-like な文脈は prompt に含めない
 - Zenz feedback には raw left context を保存せず、非可逆な context class のみを保存
@@ -250,6 +254,14 @@ Windows 版では、追加のオフライン防御層として、インストー
 
 ライブ変換は設定画面から ON/OFF を切り替えられます。また、変換開始までの遅延時間と、ライブ変換を開始する最小文字数も設定画面から変更できます。
 
+### ライブ変換 OFF 時の初回変換操作での候補表示
+
+ライブ変換を使わない場合の補助機能として、初回の変換操作で候補ウィンドウを開く設定を追加しています。この設定は既定で有効です。
+
+この設定が有効な場合、未確定文字列の入力中に通常変換コマンドを実行した時点で、第1文節の候補ウィンドウを表示します。このとき選択候補は第1候補のままで、第2候補へは進みません。さらに次候補キーを押した場合は、従来どおり次候補へ進みます。
+
+この機能はライブ変換がオフの場合だけ適用されます。Space 以外のキーに通常変換を割り当てている場合も、keymap で `Convert` に解決された初回の変換操作で同じように適用されます。ライブ変換がオンの場合は、既存のライブ変換中の Space 操作、つまり通常変換候補への移行と候補移動の挙動を優先します。従来の表示タイミングに戻したい場合は、設定画面から無効化できます。
+
 ### Zenz ライブ補正
 
 ライブ変換と Zenz ライブ補正の両方を有効にすると、まず通常の Mozc ライブ変換結果を表示し、その後でローカルの Zenz runtime に非同期で補正を依頼します。
@@ -264,15 +276,17 @@ Zenz ライブ補正は password field では実行されません。また、�
 
 Zenz feedback learning は任意機能です。有効な場合でも、Zenz 補正結果が表示されただけでは保存されません。Enter や句読点・記号の単打確定などで、表示中の Zenz 結果が明示的に確定された場合だけ、accepted feedback の候補として保留されます。
 
-保留された accepted feedback は、次のユーザー操作で取り消されなかった場合だけローカル TSV に保存されます。Backspace、Escape、Revert、Undo、IME off などの修正操作が入った場合、保留 feedback は破棄されます。表示中の Zenz 補正から Space や候補移動などの通常変換操作へ移った場合、その Zenz 結果は rejected feedback として扱われます。
+保留された accepted feedback は、次のユーザー操作で取り消されなかった場合だけローカル TSV に保存されます。Backspace、Escape、Revert、Undo などの修正操作が入った場合、保留 feedback は破棄されます。一方、IMEOff / MakeSureIMEOff は取り消しではなく確定後のモード変更として扱い、保留 feedback は確定扱いにします。表示中の Zenz 補正から Space や候補移動などの通常変換操作へ移った場合、その Zenz 結果は rejected feedback として扱われます。ただし Space などの通常操作由来の rejected feedback は、候補を永久に抑止する hard reject ではなく、以後の candidate ranking で順位を下げるための negative signal として扱います。
 
-accepted feedback の再利用方法は、単文節と複数文節で異なります。
+特に Space は、Zenz 補正を単にキャンセルしてライブ変換中の入力列へ戻すキーではなく、通常変換候補へ戻る候補変更操作として扱います。Zenz 補正表示中に Space を押すと、補正前の Mozc 変換結果を通常変換状態として表示し、候補ウィンドウはまだ開きません。そのまま次の文字を入力した場合は、戻した Mozc 変換結果を確定してから新しい入力を開始します。さらに Space を押した場合は、従来どおり通常変換の候補ウィンドウを開いて次候補へ進みます。
 
-単文節の通常変換では、Zenz feedback は rewriter chain 内の candidate promotion として再利用されます。保存済み accepted feedback が既存候補にあれば先頭へ昇格し、候補にない場合は synthetic candidate として追加できます。その後に UserSegmentHistoryRewriter が走るため、明示的なユーザー選択履歴が最終順位を決めます。
+Zenz feedback の再利用方法は、単文節と複数文節で異なります。
 
-複数文節に分かれるライブ変換では、converter の文節境界を feedback promotion で壊さないため、rewriter chain では通常変換候補を書き換えません。その代わり、session-level の live correction fast path として再利用します。これにより、`かれはてんてきです` → `彼は天敵です` のような全文補正の学習も再利用できます。
+単文節の通常変換では、Zenz feedback は rewriter chain 内の ranked candidate reuse として再利用されます。保存済み feedback は accepted / rejected reason を score 化し、既存候補があれば score に応じて cost を調整します。候補にない場合は synthetic candidate として候補集合へ追加できますが、無条件に先頭へ挿入するのではなく、feedback-adjusted cost に基づく自然な位置へ挿入します。通常操作由来の rejected feedback は候補を削除する命令ではなく順位を下げる signal として扱い、明示的な hard reject reason だけを強い抑止として扱います。その後に UserSegmentHistoryRewriter が走るため、明示的なユーザー選択履歴が最終順位を決めます。
 
-`sensitive_like` context で得られた feedback は、通常文脈への候補 promotion には使いません。
+複数文節に分かれるライブ変換では、converter の文節境界を feedback ranking で壊さないため、rewriter chain では通常変換候補を書き換えません。その代わり、session-level の live correction fast path として再利用します。これにより、`かれはてんてきです` → `彼は天敵です` のような全文補正の学習も再利用できます。
+
+`sensitive_like` context で得られた feedback は、通常文脈への候補 ranking / reuse には使いません。
 
 Zenz 学習データは設定画面から管理できます。管理画面では、学習済みエントリを読み取り専用 table で表示し、検索、インポート、エクスポート、選択項目削除、全削除を行えます。ユーザーが TSV ファイルを直接編集する必要はありません。
 
@@ -334,11 +348,27 @@ Zenz ライブ補正では、Zenzai v3/v3.2 の特殊トークン形式に沿っ
 
 ライブ変換が有効な場合、句読点・記号の単打確定では、ひらがなの未変換文字列ではなく、現在表示されているライブ変換結果を確定します。
 
-句読点・記号の単打確定でも、直前の通常変換確定による学習は次の実テキスト入力まで保留されます。次の操作が Backspace、Escape、Revert、Reset、Undo、IME off などの場合、その保留学習は保持せず取り消します。
+句読点・記号の単打確定でも、直前の通常変換確定による学習は次の実テキスト入力まで保留されます。次の操作が Backspace、Escape、Revert、Reset、Undo などの場合、その保留学習は保持せず取り消します。一方、IMEOff / MakeSureIMEOff は取り消しではなく確定後のモード変更として扱い、保留学習は確定扱いにします。
+
+句読点・記号の単打確定直後に Ctrl+Z など、現在のキー設定で Cancel に相当するキーが押され、そのキーがアプリケーションへ渡される場合も、Mozkey 側の保留学習は破棄します。実際に確定済み文字列が取り消されるかどうかは、アプリケーション側の Undo 挙動に従います。
+
+### 変換キャンセル後のひらがな確定学習
+
+変換中に Esc / Ctrl+Z など、現在のキー設定で Cancel に割り当てられた操作で変換をキャンセルし、ひらがなの未確定文字列に戻したうえで、そのまま Enter、Commit → IMEOff、IMEOff / MakeSureIMEOff、または句読点・記号の単打確定で確定した場合、このフォークではそのひらがな表記をユーザーが明示的に選んだ候補として扱います。
+
+たとえば、`きょう` を変換して `今日` が表示されたあと、Esc で `きょう` に戻して Enter や Commit → IMEOff で確定した場合、IMEOff で確定して直接入力へ戻した場合、または `きょう。` のように句読点・記号の単打確定で確定した場合、F6 でひらがな化して Enter 確定した場合に近い形で、ひらがな本体の `きょう` をユーザーセグメント履歴へ反映します。これにより、次回以降の同じ読みで、ひらがな候補が上がりやすくなります。
+
+複数文節に分かれていた変換をキャンセルした場合は、可能な限りキャンセル直前の文節境界を保持します。たとえば `おつかれぺん` が `お疲れ | ペン` のように複数文節として変換されていた場合、キャンセル後に `おつかれぺん` をそのまま確定すると、全体 1 件としてではなく、`おつかれ -> おつかれ`、`ぺん -> ぺん` のような文節単位のひらがな表記選好としてユーザーセグメント履歴へ反映します。
+
+この強い学習は、キャンセル直後の未確定文字列が編集されず、そのまま Enter、Commit → IMEOff、IMEOff / MakeSureIMEOff、または句読点・記号の単打確定で確定された場合だけ有効です。句読点・記号の単打確定では、句読点・記号を含む全文ではなく、キャンセル直後のひらがな本体だけを表記選好として扱います。通常の未変換 Enter、キャンセル後に編集した文字列、1文字だけのひらがな、ひらがな以外の文字列、パスワード欄での入力は対象外です。
+
+ライブ変換が有効な場合も、ユーザーが Esc / Ctrl+Z などのキャンセル操作で明示的にひらがなへ戻し、そのまま Enter、Commit → IMEOff、IMEOff / MakeSureIMEOff、または句読点・記号の単打確定で確定した場合は同じ扱いになります。一方で、入力継続などの内部処理としてライブ変換状態が解除されただけの場合は、この強い学習の対象にはなりません。
 
 ### 確定直後の修正による履歴学習の取り消し
 
 変換確定直後に Backspace、または現在のキー設定で Cancel に割り当てられたキーが入力された場合、このフォークでは直前に確定した学習結果を取り消し対象として扱います。
+
+句読点・記号の単打確定のように、確定文字列がすでにアプリケーションへ送られており Mozkey 側の通常の Undo context に乗らない場合でも、直後の Ctrl+Z などの Cancel 相当キーは保留学習の取り消しシグナルとして扱います。この場合、キー入力自体はアプリケーションへ渡し、画面上の文字列を実際に戻すかどうかはアプリケーション側の Undo 挙動に任せます。
 
 確定した文字列全体を削除した場合は、その確定によるサジェスト履歴およびユーザーセグメント履歴が、以後のサジェストや変換順位に残らないようにします。
 
@@ -406,11 +436,15 @@ Windows 版では、設定画面の「その他の設定」→「既定の IME�
 
 すでに Mozkey が既定 IME として設定されている場合や、未復元のバックアップが残っている場合は、変更前の復元点を上書きしないようにしています。
 
-### Windows 候補ウィンドウ・ルビ表示・IME インジケータの外観設定
+### Windows 候補ウィンドウ・サジェストウィンドウ・ルビ表示・IME インジケータの外観設定
 
-Windows 版では、設定画面から候補ウィンドウの通常テーマとダークテーマを切り替えられます。
+Windows 版では、設定画面から候補ウィンドウ、サジェストウィンドウ、ライブ変換中のルビ表示の外観を調整できます。
 
-ダークテーマでは配色だけでなく、余白、角丸、フッター表示なども調整し、候補ウィンドウ全体の見た目をよりモダンにしています。
+候補ウィンドウはライト / ダーク / カスタム配色を選択できます。サジェストウィンドウとルビ表示は、候補ウィンドウの配色に追従するか、ライト / ダーク / カスタム配色を個別に使うかを選択できます。
+
+カスタム配色では、候補ウィンドウとサジェストウィンドウについて、背景、文字、選択背景、選択枠、枠線、ショートカット、説明、フッター、スクロールバーなどの色を調整できます。ルビ表示については、背景、文字、枠線の色を調整できます。
+
+各ウィンドウの表示サイズ、角丸、透明度、影の広がり、濃さ、方向、距離も設定できます。影の方向は画面座標基準の角度で指定し、0° は右、45° は右下、90° は下を表します。影の距離を 0 にすると、全方向に均等な影になります。変換候補・用例などの候補系表示には候補ウィンドウ設定を使い、予測・サジェスト系表示にはサジェストウィンドウ設定を使います。
 
 候補ウィンドウ、用例ウィンドウ、ライブ変換中のルビ表示に使うフォントも設定画面から変更できます。既定フォントに戻すこともでき、選択したフォントを候補表示に適用できない場合は、候補ウィンドウが消えないように既定フォントへフォールバックします。
 
@@ -585,7 +619,9 @@ Main features added in this fork
 - Allows choosing direct-commit punctuations and symbols from the config dialog
 - Makes punctuation conversion and punctuation/symbol direct commit mutually exclusive
 - Improves user-history learning behavior when a committed conversion is immediately corrected with Backspace or Cancel
-- Keeps learning caused by direct-commit punctuations/symbols pending until the next real text input, and allows it to be reverted by Backspace, Escape, Revert, Reset, Undo, or IME off
+- Learns a hiragana choice when an active conversion is canceled with Esc, Ctrl+Z, or another key bound to Cancel and the restored hiragana preedit is immediately committed with Enter or a direct-commit punctuation/symbol, similarly to F6 -> Enter
+- For multi-segment conversions canceled back to hiragana, preserves conversion-time segment boundaries when possible and learns each hiragana segment as a spelling preference, rather than as a single whole restored preedit
+- Keeps learning caused by direct-commit punctuations/symbols pending until the next real text input, reverts it on Backspace, Escape, cancel-equivalent keys such as Ctrl+Z, Revert, Reset, or Undo, and confirms it on IMEOff / MakeSureIMEOff
 - Adds live conversion that automatically converts the current composition and shows a ruby-like overlay for the original reading
 - Allows enabling/disabling live conversion and configuring its debounce delay and minimum start length from the config dialog
 - Applies live conversion after a short debounce delay to avoid noisy intermediate conversions
@@ -599,11 +635,11 @@ Main features added in this fork
 - Allows assigning left/right Shift and left/right Ctrl separately on Windows
 - Shows the IME mode indicator even when a key assigned to IMEOn or IMEOff is pressed while Mozc is already in that state
 - Adds explicit Windows default IME controls to the config dialog, with restore support for the previous default IME setting
-- Adds a dark-mode switch for the Windows candidate window
+- Allows configuring light/dark/custom color themes, size, corner radius, opacity, and shadow separately for the Windows candidate window, suggestion window, and live-conversion ruby display from the config dialog
+- Allows the suggestion window and ruby display to either follow the candidate window color theme or use their own theme/custom colors
 - Allows changing the font used for the Windows candidate window, infolist window, and live-conversion ruby display from the config dialog
 - Allows enabling or disabling the ruby display shown during live conversion from the config dialog
 - Allows customizing Windows preedit text color, background color, and underline color from the config dialog
-- Adjusts the appearance of the Windows candidate window and IME mode indicator, including colors, spacing, rounded corners, and layout
 - Makes the Windows IME mode indicator follow the Windows light/dark theme
 - Adds an enhanced system dictionary generation pipeline
 - Allows incorporating place names and SudachiDict-derived vocabulary from merge-ut-dictionaries into the system dictionary
@@ -619,13 +655,14 @@ Main features added in this fork
 - Allows configuring the minimum number of characters to start Zenz correction
 - Adds optional local feedback learning for Zenz correction results
 - Does not store Zenz feedback just because a Zenz correction was displayed. A visible Zenz result becomes pending accepted feedback only when the user explicitly commits it, such as with Enter or a direct-commit punctuation/symbol
-- Writes pending accepted feedback to the local TSV only if it is not canceled by Backspace, Escape, Revert, Undo, IME off, or similar correction actions before the next real text input
-- Treats a visible Zenz correction as rejected feedback when the user moves to normal conversion operations such as Space or candidate movement
+- Writes pending accepted feedback to the local TSV only if it is not canceled by Backspace, Escape, Revert, Undo, or similar correction actions before the next real text input. IMEOff / MakeSureIMEOff are treated as post-commit mode changes rather than cancellation
+- Treats a visible Zenz correction as rejected feedback when the user moves to normal conversion operations such as Space or candidate movement. Ordinary rejected feedback from these operations is used as a negative ranking signal rather than as a hard command to suppress the candidate
+- When Space restores the underlying Mozc normal conversion from a visible Zenz correction, the next text input commits that restored conversion before starting a new composition
 - Adds a safe Zenz feedback management UI to the config dialog. Users can search, import, export, delete selected entries, and clear all entries without directly editing the TSV file
-- Reuses accepted Zenz feedback for normal conversion candidate promotion. In single-segment conversions, an accepted feedback candidate is promoted to the top if it already exists, or inserted as a synthetic candidate if it does not
-- Does not apply Zenz feedback promotion to multi-segment conversions, to avoid collapsing phrase boundaries
+- Reuses Zenz feedback for normal conversion candidate ranking. In single-segment conversions, stored feedback is scored, existing candidates receive feedback-adjusted costs, and missing feedback candidates may be inserted as synthetic candidates at a natural cost-based position. Accepted feedback raises the candidate, while ordinary rejected feedback lowers it without deleting it
+- Does not apply Zenz feedback ranking to multi-segment normal conversions, to avoid collapsing phrase boundaries
 - Reuses accepted Zenz feedback via the session-level live-correction fast path for multi-segment live conversion to preserve learned full-phrase corrections
-- Does not promote feedback obtained from `sensitive_like` context into ordinary context
+- Does not reuse feedback obtained from `sensitive_like` context for ordinary-context candidate ranking
 - Learns accepted Zenz candidates into Mozc user history as external conversion results when the runtime conditions allow it
 - Sanitizes left context before using it in Zenz prompts, and excludes sensitive-like context such as URLs, email addresses, file paths, tokens, and long digit sequences
 - Stores only non-reversible context classes in Zenz feedback and never stores raw left context
@@ -718,28 +755,44 @@ when the user explicitly commits the visible Zenz result, such as by pressing
 Enter or by using a direct-commit punctuation/symbol.
 
 Pending accepted feedback is written to the local TSV only if it is not canceled
-by the next user action. Backspace, Escape, Revert, Undo, IME off, and similar
-correction actions discard the pending feedback. Moving from a visible Zenz
-correction to normal conversion operations, such as Space or candidate movement,
-records the Zenz result as rejected feedback instead.
+by the next user action. Backspace, Escape, Revert, Undo, and similar correction
+actions discard the pending feedback. IMEOff / MakeSureIMEOff are treated as
+post-commit mode changes rather than cancellation, so the pending feedback is
+confirmed. Moving from a visible Zenz correction to normal conversion operations,
+such as Space or candidate movement, records the Zenz result as rejected feedback
+instead. Ordinary rejected feedback from these operations is interpreted as a
+negative ranking signal, not as a hard command to permanently suppress the
+candidate.
 
-Accepted feedback is reused differently for single-segment and multi-segment
+Space is treated specifically as a candidate-change operation, not as a plain
+cancel back into the live-conversion composition. When Space is pressed while a
+Zenz correction is visible, Mozkey restores the underlying Mozc conversion as an
+ordinary conversion result without opening the candidate window yet. If the user
+then types more text, the restored Mozc conversion is committed first and the
+new text starts a fresh composition. Pressing Space again follows the ordinary
+conversion path and opens the candidate window for the next candidate.
+
+Zenz feedback is reused differently for single-segment and multi-segment
 conversions.
 
-For single-segment normal conversion, Zenz feedback is reused as candidate
-promotion inside the rewriter chain. A learned feedback candidate can be
-promoted to the top if it already exists, or inserted as a synthetic candidate
-if it does not. ZenzFeedbackCandidateRewriter runs before
+For single-segment normal conversion, Zenz feedback is reused as ranked
+candidate augmentation inside the rewriter chain. Stored feedback is scored
+from accepted counts and rejected reasons. If the feedback value already exists
+in the candidate list, its cost is adjusted by that score. If it does not exist,
+a synthetic candidate can be inserted at a natural feedback-adjusted cost
+position instead of being forced to the top. Ordinary rejected feedback lowers
+the candidate's ranking without deleting it; only explicit hard-reject reasons
+act as strong suppression. ZenzFeedbackCandidateRewriter runs before
 UserSegmentHistoryRewriter, so explicit user selection history can still make
 the final ranking decision.
 
-For multi-segment live conversion, the rewriter-chain feedback promotion does
+For multi-segment live conversion, the rewriter-chain feedback ranking does
 not rewrite normal conversion candidates, because phrase boundaries are owned by
 the converter and should not be collapsed. Instead, accepted feedback can still be replayed via
 the session-level live-correction fast path. This preserves learned full-phrase
 corrections such as `かれはてんてきです` -> `彼は天敵です`.
 
-Feedback learned in a `sensitive_like` context is not promoted into ordinary-context conversion candidates.
+Feedback learned in a `sensitive_like` context is not reused for ordinary-context candidate ranking.
 
 Zenz feedback data can be managed from the config dialog. The management dialog
 shows learned entries in a read-only table and supports search, import, export,
@@ -812,12 +865,33 @@ When live conversion is enabled, direct-commit punctuations/symbols commit the c
 
 For direct-commit punctuations/symbols, learning caused by the immediately
 committed conversion is also kept pending until the next real text input. If the
-next action is Backspace, Escape, Revert, Reset, Undo, or IME off, the pending
-learning is reverted instead of being kept.
+next action is Backspace, Escape, Revert, Reset, or Undo, the pending learning is
+reverted instead of being kept. IMEOff / MakeSureIMEOff are treated as
+post-commit mode changes rather than cancellation, so the pending learning is
+confirmed.
+
+When a cancel-equivalent key such as Ctrl+Z is pressed immediately after a
+direct-commit punctuation/symbol and that key is echoed back to the application,
+Mozkey also discards the pending learning. Whether the already-committed text is
+actually undone depends on the application's own Undo behavior.
+
+### Hiragana learning after conversion cancel
+
+When an active conversion is canceled with Esc, Ctrl+Z, or another key bound to Cancel, the preedit returns to raw hiragana. If the user immediately commits that restored hiragana preedit with Enter, Commit → IMEOff, IMEOff / MakeSureIMEOff, or a direct-commit punctuation/symbol, this fork treats the hiragana spelling as an explicitly selected candidate.
+
+For example, if `きょう` is converted to `今日`, then canceled back to `きょう` with Esc and committed with Enter or Commit → IMEOff, committed by IMEOff while returning to direct input, or committed as `きょう。` by direct-commit punctuation, the hiragana body `きょう` is learned in user segment history similarly to F6 -> Enter. This makes the hiragana candidate more likely to be promoted for the same reading later.
+
+For multi-segment conversions, this fork preserves the conversion-time segment boundaries when possible. For example, if `おつかれぺん` had been converted as `お疲れ | ペン`, then canceled back to `おつかれぺん` and committed unchanged, the learning is recorded as segment-level hiragana preferences such as `おつかれ -> おつかれ` and `ぺん -> ぺん`, rather than as a single whole restored preedit.
+
+This strong-learning path is intentionally narrow. It applies only when the preedit is unchanged after Cancel and is committed immediately with Enter, Commit → IMEOff, IMEOff / MakeSureIMEOff, or a direct-commit punctuation/symbol. For direct-commit punctuation/symbols, only the restored hiragana body is learned as the spelling preference; the punctuation/symbol suffix is not included in that user-segment history entry. The committed hiragana body must be at least two hiragana characters, the reading and committed value must be identical, and the input must not be from a password field. Plain raw preedit commits, commits after editing the canceled preedit, one-character hiragana commits, non-hiragana commits, and password fields are excluded.
+
+With live conversion enabled, the same behavior applies when the user explicitly cancels back to hiragana and immediately commits it with Enter, Commit → IMEOff, IMEOff / MakeSureIMEOff, or a direct-commit punctuation/symbol. Internal live-conversion cancellation used only for continuing input does not trigger this strong-learning path.
 
 ### Partial revert of history learning after immediate correction
 
 When a committed conversion is immediately followed by Backspace, or by a key assigned to Cancel in the current keymap, this fork treats it as a revert signal for the just-committed learning result.
+
+For direct-commit punctuations/symbols, the committed text may already have been sent to the application without using Mozkey's normal Undo context. In that case, a cancel-equivalent key such as Ctrl+Z still discards Mozkey's pending learning, while the key itself is passed through to the application. Whether the visible text is actually undone depends on the application's own Undo behavior.
 
 If the entire committed text is erased, the just-committed suggestion history and user segment history do not continue to affect later suggestions or conversions.
 
@@ -887,17 +961,38 @@ Before changing the setting, Mozkey saves the previous Windows default input met
 
 If Mozkey is already the default IME, or if an active restore point already exists, Mozkey does not overwrite the previous restore point.
 
-### Windows candidate window, ruby display, and IME indicator appearance
+### Windows candidate window, suggestion window, ruby display, and IME indicator appearance
 
-On Windows, the candidate window can be switched between the default light theme and a dark theme from the config dialog.
+On Windows, the config dialog can customize the appearance of the candidate
+window, the suggestion window, and the ruby display shown during live conversion.
 
-The dark theme also adjusts the candidate window appearance, including colors, spacing, rounded corners, and footer visibility, to make it look more modern.
+The candidate window can use the light theme, dark theme, or custom colors. The
+suggestion window and ruby display can either follow the candidate window
+appearance or use their own light, dark, or custom color settings.
 
-The font used for the candidate window, infolist window, and live-conversion ruby display can also be changed from the config dialog. The setting can be reset to the default font, and the renderer falls back to the default font if the selected font cannot be used reliably for candidate rendering.
+Custom colors can be configured for the candidate and suggestion windows,
+including the background, text, selected background, selected border, border,
+shortcut, description, footer, and scrollbar colors. For the ruby display, the
+background, text, and border colors can be customized.
 
-The ruby display shown during live conversion can be enabled or disabled from the config dialog.
+The display size, corner radius, opacity, and shadow spread, opacity, angle,
+and distance can also be configured for each window. The shadow angle uses
+screen coordinates: 0° is right, 45° is down-right, and 90° is down. Set the
+shadow distance to 0 for an even shadow on all sides.
+Candidate-like displays such as conversion candidates and usage/infolist windows
+use the candidate window settings, while prediction/suggestion displays use the
+suggestion window settings.
 
-The IME mode indicator follows the Windows light/dark theme and changes its colors to keep the current input mode easy to recognize.
+The font used for the candidate window, infolist window, and live-conversion
+ruby display can also be changed from the config dialog. The setting can be
+reset to the default font, and the renderer falls back to the default font if
+the selected font cannot be used reliably for candidate rendering.
+
+The ruby display shown during live conversion can be enabled or disabled from
+the config dialog.
+
+The IME mode indicator follows the Windows light/dark theme and changes its
+colors to keep the current input mode easy to recognize.
 
 ### Windows preedit display colors
 
