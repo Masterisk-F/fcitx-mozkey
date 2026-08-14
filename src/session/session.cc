@@ -176,6 +176,11 @@ std::string ZenzSafeDebugReason(absl::string_view debug) {
 // Maximum size of multiple undo stack.
 const size_t kMultipleUndoMaxSize = 10;
 
+// Avoid teaching one-character particles or accidental raw commits as strong
+// user segment history when the user cancels a conversion and immediately
+// commits the restored hiragana preedit.
+constexpr size_t kMinRerankedPreeditCommitCharsAfterConvertCancel = 2;
+
 // Default live conversion debounce delay. The user-visible value is stored in
 // Config::live_conversion_delay_msec.
 constexpr uint32_t kDefaultLiveConversionDelayMillisec = 228;
@@ -2678,6 +2683,18 @@ bool Session::TestSendKey(commands::Command* command) {
         return Revert(command);
       }
 
+      if (pending_direct_commit_learning_.pending &&
+          IsCancelKeyForCompositionOrConversion(key)) {
+        // A direct-commit punctuation/symbol may have already sent text to the
+        // application without creating Mozc's undo context.  In that case a
+        // cancel-like key such as Ctrl+Z should still cancel Mozkey's pending
+        // learning, while the key itself must be echoed back so that the
+        // application can decide how to undo the visible text.
+        DiscardPendingDirectCommitLearning(
+            "precomposition_cancel_key_after_direct_commit_learning");
+        return EchoBackAndClearUndoContext(command);
+      }
+
       // Clear undo context just in case. b/5529702.
       // Note that the undo context will not be cleared in
       // EchoBackAndClearUndoContext if the key event consists of modifier keys
@@ -3329,6 +3346,18 @@ bool Session::SendKeyPrecompositionState(commands::Command* command) {
         IsCancelKeyForCompositionOrConversion(command->input().key())) {
       return Revert(command);
     }
+
+    if (pending_direct_commit_learning_.pending &&
+        IsCancelKeyForCompositionOrConversion(command->input().key())) {
+      // A direct-commit punctuation/symbol may have already sent text to the
+      // application without creating Mozc's undo context.  In that case a
+      // cancel-like key such as Ctrl+Z should still cancel Mozkey's pending
+      // learning, while the key itself must be echoed back so that the
+      // application can decide how to undo the visible text.
+      DiscardPendingDirectCommitLearning(
+          "precomposition_cancel_key_after_direct_commit_learning");
+      return EchoBackAndClearUndoContext(command);
+    }
     return EchoBackAndClearUndoContext(command);
   }
 
@@ -3466,15 +3495,36 @@ bool Session::SendKeyConversionState(commands::Command* command) {
           remaining_sequence, &zenz_commit_output, command);
     }
 
-    // While a zenz correction is visible, the first plain Space should peel off
-    // only the speculative correction layer and return to the stable Mozc live
-    // conversion result.  The next Space can then enter normal candidate
-    // navigation as usual.  Other candidate-navigation keys keep their explicit
-    // navigation semantics.
+    // While a zenz correction is visible, plain Space is an explicit
+    // candidate-change operation.  Reject the speculative zenz layer and
+    // restore the underlying Mozc conversion, but promote it to ordinary
+    // conversion state so the next text input commits it instead of extending
+    // the same live-conversion composition.
     if (key_command == keymap::ConversionState::CONVERT_NEXT &&
         IsPureSpaceKey(input_key) &&
         HasVisibleZenzLiveCorrection()) {
-      return RevertZenzLiveCorrectionToLiveConversion(command);
+      return RevertZenzLiveCorrectionToNormalConversion(command);
+    }
+
+    // A prediction key such as Tab should focus prediction candidates even while
+    // live conversion is active.  Do this before the generic live-conversion
+    // promotion below, otherwise PredictAndConvert() would see an ordinary
+    // CONVERSION state and fall back to ConvertNext().  Other conversion
+    // commands still follow their existing keymap-defined conversion path.
+    if (key_command == keymap::ConversionState::PREDICT_AND_CONVERT) {
+      if (!PredictAndConvertFromLiveConversion(command)) {
+        return false;
+      }
+
+      if (command_sequence.size() == 1) {
+        return true;
+      }
+
+      const commands::Output prediction_output = command->output();
+      keymap::CommandSequence remaining_sequence(
+          command_sequence.begin() + 1, command_sequence.end());
+      return ExecuteCommandSequenceWithInitialOutput(
+          remaining_sequence, &prediction_output, command);
     }
 
     // Explicit conversion operations such as Space, candidate movement, or Cancel
@@ -3538,9 +3588,8 @@ bool Session::IMEOn(commands::Command* command) {
 }
 
 bool Session::IMEOff(commands::Command* command) {
-  DiscardPendingDirectCommitLearning(
-      "ime_off_after_direct_commit_learning");
-  DiscardPendingZenzFeedback("ime_off_after_pending_feedback");
+  ConfirmPendingDirectCommitLearning("ime_off_after_direct_commit_learning");
+  ConfirmPendingZenzFeedback();
 
   command->mutable_output()->set_consumed(true);
   ClearUndoContext();
@@ -3578,9 +3627,9 @@ bool Session::MakeSureIMEOn(mozc::commands::Command* command) {
 }
 
 bool Session::MakeSureIMEOff(mozc::commands::Command* command) {
-  DiscardPendingDirectCommitLearning(
+  ConfirmPendingDirectCommitLearning(
       "make_sure_ime_off_after_direct_commit_learning");
-  DiscardPendingZenzFeedback("make_sure_ime_off_after_pending_feedback");
+  ConfirmPendingZenzFeedback();
 
   if (command->input().has_command() &&
       command->input().command().has_composition_mode() &&
@@ -3661,6 +3710,8 @@ bool Session::Revert(commands::Command* command) {
       "revert_after_direct_commit_learning");
   DiscardPendingZenzFeedback("revert_after_pending_feedback");
 
+  ClearPendingRerankedPreeditCommitAfterConvertCancel();
+
   if (context_->state() == ImeContext::PRECOMPOSITION) {
     context_->mutable_converter()->Revert();
     return EchoBackAndClearUndoContext(command);
@@ -3684,6 +3735,8 @@ bool Session::ResetContext(commands::Command* command) {
   DiscardPendingDirectCommitLearning(
       "reset_context_after_direct_commit_learning");
   DiscardPendingZenzFeedback("reset_context_after_pending_feedback");
+
+  ClearPendingRerankedPreeditCommitAfterConvertCancel();
 
   if (context_->state() == ImeContext::PRECOMPOSITION) {
     context_->mutable_converter()->Reset();
@@ -3845,6 +3898,8 @@ bool Session::Undo(commands::Command* command) {
   DiscardPendingDirectCommitLearning(
       "undo_command_after_direct_commit_learning");
   DiscardPendingZenzFeedback("undo_command_after_pending_feedback");
+
+  ClearPendingRerankedPreeditCommitAfterConvertCancel();
 
   if (!(context_->state() &
         (ImeContext::PRECOMPOSITION | ImeContext::CONVERSION |
@@ -4020,6 +4075,8 @@ void Session::CancelPendingLiveConversion() {
   live_conversion_pending_ = false;
   pending_live_conversion_generation_ = 0;
   pending_live_conversion_key_.clear();
+  pending_live_conversion_input_.Clear();
+  pending_live_conversion_suggestion_candidate_window_.Clear();
   CancelPendingZenzLiveCorrection();
 }
 
@@ -4030,6 +4087,9 @@ void Session::ClearLiveConversionState() {
   live_conversion_pending_ = false;
   pending_live_conversion_generation_ = 0;
   pending_live_conversion_key_.clear();
+  pending_live_conversion_input_.Clear();
+  pending_live_conversion_suggestion_candidate_window_.Clear();
+  live_conversion_suggestion_candidate_window_.Clear();
 
   live_conversion_key_.clear();
   live_conversion_preedit_.clear();
@@ -4088,9 +4148,26 @@ bool Session::MaybeStartLiveConversion(commands::Command* command) {
   const std::string live_conversion_preedit =
       context_->composer().GetStringForPreedit();
 
+  // Delayed live-conversion callbacks are SEND_COMMAND inputs and may not carry
+  // the same request_suggestion/context data as the original SEND_KEY input.
+  // Keep the original input for passive suggestion generation so the suggestion
+  // window does not disappear when the delayed live conversion materializes.
+  const bool use_pending_live_conversion_input =
+      live_conversion_pending_ &&
+      pending_live_conversion_key_ == live_conversion_key &&
+      pending_live_conversion_input_.type() != commands::Input::NONE;
+  const commands::Input live_conversion_suggestion_input =
+      use_pending_live_conversion_input ? pending_live_conversion_input_
+                                        : command->input();
+  const commands::CandidateWindow
+      pending_live_conversion_suggestion_candidate_window =
+          pending_live_conversion_suggestion_candidate_window_;
+
   live_conversion_pending_ = false;
   pending_live_conversion_generation_ = 0;
   pending_live_conversion_key_.clear();
+  pending_live_conversion_input_.Clear();
+  pending_live_conversion_suggestion_candidate_window_.Clear();
 
   if (!context_->mutable_converter()->Convert(context_->composer())) {
     OutputComposition(command);
@@ -4136,6 +4213,14 @@ bool Session::MaybeStartLiveConversion(commands::Command* command) {
     return true;
   }
 
+  if (!AttachLiveConversionSuggestionCandidateWindow(
+          live_conversion_suggestion_input, command->mutable_output()) &&
+      pending_live_conversion_suggestion_candidate_window.candidate_size() > 0) {
+    live_conversion_suggestion_candidate_window_ =
+        pending_live_conversion_suggestion_candidate_window;
+    *command->mutable_output()->mutable_candidate_window() =
+        live_conversion_suggestion_candidate_window_;
+  }
   MaybeScheduleZenzLiveCorrection(command);
   return true;
 }
@@ -4272,6 +4357,8 @@ bool Session::MaybeScheduleLiveConversion(commands::Command* command) {
   live_conversion_pending_ = true;
   pending_live_conversion_generation_ = live_conversion_generation_;
   pending_live_conversion_key_ = key;
+  pending_live_conversion_input_ = command->input();
+  pending_live_conversion_suggestion_candidate_window_.Clear();
 
   if (!OutputPendingLiveConversion(command)) {
     // Avoid showing raw hiragana fallback. If pending display cannot be built
@@ -4279,6 +4366,11 @@ bool Session::MaybeScheduleLiveConversion(commands::Command* command) {
     return MaybeStartLiveConversion(command);
   }
 
+  if (AttachLiveConversionSuggestionCandidateWindow(command->input(),
+                                                    command->mutable_output())) {
+    pending_live_conversion_suggestion_candidate_window_ =
+        command->output().candidate_window();
+  }
   AttachDelayedLiveConversionCallback(command);
 
   return true;
@@ -4292,6 +4384,8 @@ bool Session::IgnoreStaleDelayedLiveConversion(commands::Command* command) {
   // composer still has text.
   if (live_conversion_pending_) {
     OutputPendingLiveConversion(command);
+    AttachCachedLiveConversionSuggestionCandidateWindow(
+        command->mutable_output());
     return true;
   }
 
@@ -4308,6 +4402,8 @@ bool Session::IgnoreStaleDelayedLiveConversion(commands::Command* command) {
 
     command->mutable_output()->set_live_conversion(true);
     command->mutable_output()->set_live_conversion_pending(false);
+    AttachCachedLiveConversionSuggestionCandidateWindow(
+        command->mutable_output());
     return true;
   }
 
@@ -4725,15 +4821,11 @@ void Session::DiscardPendingZenzFeedback(absl::string_view reason) {
   pending_zenz_feedback_ = PendingZenzFeedback();
 }
 
-bool Session::SetPendingDirectCommitLearningFromCommittedResult(
-    const commands::Command& command,
+bool Session::SetPendingDirectCommitLearning(
+    absl::string_view key,
+    absl::string_view value,
     absl::string_view reason) {
-  if (!command.output().has_result()) {
-    return false;
-  }
-
-  const commands::Result& result = command.output().result();
-  if (result.key().empty() || result.value().empty()) {
+  if (key.empty() || value.empty()) {
     return false;
   }
 
@@ -4743,8 +4835,8 @@ bool Session::SetPendingDirectCommitLearningFromCommittedResult(
   }
 
   pending_direct_commit_learning_.pending = true;
-  pending_direct_commit_learning_.key = result.key();
-  pending_direct_commit_learning_.value = result.value();
+  pending_direct_commit_learning_.key = std::string(key);
+  pending_direct_commit_learning_.value = std::string(value);
   pending_direct_commit_learning_.reason = std::string(reason);
 
   // Keep a snapshot of the converter state immediately after the normal
@@ -4762,6 +4854,17 @@ bool Session::SetPendingDirectCommitLearningFromCommittedResult(
                                  pending_direct_commit_learning_.value)));
 
   return true;
+}
+
+bool Session::SetPendingDirectCommitLearningFromCommittedResult(
+    const commands::Command& command,
+    absl::string_view reason) {
+  if (!command.output().has_result()) {
+    return false;
+  }
+
+  const commands::Result& result = command.output().result();
+  return SetPendingDirectCommitLearning(result.key(), result.value(), reason);
 }
 
 void Session::ConfirmPendingDirectCommitLearning(absl::string_view reason) {
@@ -4830,7 +4933,6 @@ void Session::HandlePendingDirectCommitLearningForSessionCommand(
     case commands::SessionCommand::REVERT:
     case commands::SessionCommand::RESET_CONTEXT:
     case commands::SessionCommand::UNDO:
-    case commands::SessionCommand::TURN_OFF_IME:
       DiscardPendingDirectCommitLearning(
           "session_command_discard_after_direct_commit");
       break;
@@ -4875,7 +4977,6 @@ void Session::HandlePendingZenzFeedbackForSessionCommand(
     case commands::SessionCommand::REVERT:
     case commands::SessionCommand::RESET_CONTEXT:
     case commands::SessionCommand::UNDO:
-    case commands::SessionCommand::TURN_OFF_IME:
       DiscardPendingZenzFeedback("session_command_discard");
       break;
     default:
@@ -5404,6 +5505,7 @@ bool Session::OutputCurrentLiveConversionWithZenzPending(
     output->set_live_conversion(true);
     output->set_live_conversion_pending(false);
     output->set_zenz_live_correction_pending(true);
+    AttachCachedLiveConversionSuggestionCandidateWindow(output);
     return true;
   }
 
@@ -5434,6 +5536,7 @@ bool Session::OutputCurrentLiveConversionAfterZenzStop(
     if (!debug.empty()) {
       output->set_zenz_live_correction_debug(std::string(debug));
     }
+    AttachCachedLiveConversionSuggestionCandidateWindow(output);
     return true;
   }
 
@@ -5518,6 +5621,7 @@ bool Session::AdvancePendingZenzLiveCorrection(
       output->set_live_conversion(true);
       output->set_live_conversion_pending(false);
       output->set_zenz_live_correction_pending(true);
+      AttachCachedLiveConversionSuggestionCandidateWindow(output);
     }
     AttachZenzLiveCorrectionPollCallback(command);
     return result;
@@ -5847,17 +5951,19 @@ bool Session::OutputZenzLiveCorrection(
   // as user acceptance. Acceptance must be recorded only when the user commits
   // the visible zenz result.
   zenz_live_preedit_output_ = *preedit;
+
+  AttachCachedLiveConversionSuggestionCandidateWindow(output);
   return true;
 }
 
-bool Session::RevertZenzLiveCorrectionToLiveConversion(
+bool Session::RevertZenzLiveCorrectionToNormalConversion(
     commands::Command* command) {
   if (!HasVisibleZenzLiveCorrection()) {
     return false;
   }
 
   ZenzDebugOutput(absl::StrCat(
-      "[zenz-feedback] revert zenz correction to mozc live conversion ",
+      "[zenz-feedback] revert zenz correction to mozc normal conversion ",
       ZenzRedactedTextStats("key", zenz_live_key_),
       " ", ZenzRedactedTextStats("zenz_value", zenz_live_value_),
       " ", ZenzRedactedTextStats("mozc_value", zenz_live_mozc_value_),
@@ -5866,30 +5972,35 @@ bool Session::RevertZenzLiveCorrectionToLiveConversion(
   SetPendingZenzFeedbackRejected("space_revert_zenz_to_mozc");
 
   const commands::Preedit live_preedit = live_conversion_preedit_output_;
-  ClearZenzLiveCorrectionState();
+  const std::string live_value = live_conversion_value_;
+
+  // This Space is already a conversion operation.  After peeling off the zenz
+  // layer, keep the converter's current segments but leave live conversion
+  // mode.  This makes the next character input follow normal conversion
+  // semantics: commit the restored Mozc result first, then start a new
+  // composition.
+  ClearLiveConversionState();
+  context_->mutable_converter()->SetCandidateListVisible(false);
 
   command->mutable_output()->set_consumed(true);
   OutputMode(command);
 
   commands::Output* output = command->mutable_output();
   output->clear_candidate_window();
-  output->set_live_conversion(true);
-  output->set_live_conversion_pending(false);
-  output->set_zenz_live_correction_pending(false);
-  output->set_zenz_live_correction_applied(false);
 
   if (live_preedit.segment_size() > 0) {
     *output->mutable_preedit() = live_preedit;
-    output->mutable_preedit()->set_cursor(
-        Util::CharsLen(live_conversion_value_));
+    output->mutable_preedit()->set_cursor(Util::CharsLen(live_value));
   } else {
     Output(command);
+    output = command->mutable_output();
     output->clear_candidate_window();
-    output->set_live_conversion(true);
-    output->set_live_conversion_pending(false);
-    output->set_zenz_live_correction_pending(false);
-    output->set_zenz_live_correction_applied(false);
   }
+
+  output->set_live_conversion(false);
+  output->set_live_conversion_pending(false);
+  output->set_zenz_live_correction_pending(false);
+  output->set_zenz_live_correction_applied(false);
 
   return true;
 }
@@ -6003,6 +6114,107 @@ absl::Time Session::last_command_time() const {
   return context_->last_command_time();
 }
 
+void Session::ClearPendingRerankedPreeditCommitAfterConvertCancel() {
+  pending_reranked_preedit_commit_after_convert_cancel_ = false;
+  pending_reranked_preedit_commit_key_.clear();
+  pending_reranked_preedit_commit_value_.clear();
+  pending_reranked_preedit_commit_segment_keys_.clear();
+}
+
+void Session::MaybeSetPendingRerankedPreeditCommitAfterConvertCancel() {
+  ClearPendingRerankedPreeditCommitAfterConvertCancel();
+
+  const std::string key = context_->composer().GetQueryForConversion();
+  const std::string value = context_->composer().GetStringForSubmission();
+  if (key.empty() || value.empty()) {
+    return;
+  }
+
+  pending_reranked_preedit_commit_after_convert_cancel_ = true;
+  pending_reranked_preedit_commit_key_ = key;
+  pending_reranked_preedit_commit_value_ = value;
+
+  // Snapshot the visible conversion segment keys before converter->Cancel()
+  // clears them.  If the user commits the restored hiragana unchanged, these
+  // boundaries let user segment history learn each original conversion segment
+  // separately instead of learning only the whole restored preedit string.
+  std::vector<std::string> segment_keys;
+  if (!context_->converter().GetConversionSegmentKeys(&segment_keys)) {
+    return;
+  }
+
+  std::string joined_key;
+  for (const std::string& segment_key : segment_keys) {
+    if (segment_key.empty()) {
+      segment_keys.clear();
+      break;
+    }
+    joined_key.append(segment_key);
+  }
+  if (!segment_keys.empty() && joined_key == key) {
+    pending_reranked_preedit_commit_segment_keys_ = std::move(segment_keys);
+  }
+}
+
+bool Session::ShouldMarkPreeditCommitAsRerankedAfterConvertCancel() const {
+  return ShouldMarkPreeditCommitAsRerankedAfterConvertCancel(
+      context_->composer());
+}
+
+bool Session::ShouldMarkPreeditCommitAsRerankedAfterConvertCancel(
+    const composer::Composer& composer) const {
+  if (!pending_reranked_preedit_commit_after_convert_cancel_) {
+    return false;
+  }
+
+  if (composer.GetInputFieldType() == commands::Context::PASSWORD) {
+    return false;
+  }
+
+  const std::string key = composer.GetQueryForConversion();
+  const std::string value = composer.GetStringForSubmission();
+  if (key != pending_reranked_preedit_commit_key_ ||
+      value != pending_reranked_preedit_commit_value_) {
+    return false;
+  }
+
+  if (key != value) {
+    return false;
+  }
+
+  if (Util::CharsLen(key) <
+      kMinRerankedPreeditCommitCharsAfterConvertCancel) {
+    return false;
+  }
+
+  return Util::IsScriptType(key, Util::HIRAGANA);
+}
+
+bool Session::CommitPendingRerankedPreeditAfterConvertCancelForDirectCommit(
+    const composer::Composer& composer,
+    const commands::Context& context,
+    absl::string_view reason) {
+  if (!pending_reranked_preedit_commit_after_convert_cancel_) {
+    return false;
+  }
+
+  if (!ShouldMarkPreeditCommitAsRerankedAfterConvertCancel(composer)) {
+    ClearPendingRerankedPreeditCommitAfterConvertCancel();
+    return false;
+  }
+
+  const std::string key = composer.GetQueryForConversion();
+  const std::string value = composer.GetStringForSubmission();
+
+  const std::vector<std::string> segment_keys =
+      pending_reranked_preedit_commit_segment_keys_;
+  context_->mutable_converter()->CommitPreedit(
+      composer, context, true, segment_keys);
+  SetPendingDirectCommitLearning(key, value, reason);
+  ClearPendingRerankedPreeditCommitAfterConvertCancel();
+  return true;
+}
+
 bool Session::InsertCharacter(commands::Command* command) {
   if (!command->input().has_key()) {
     LOG(ERROR) << "No key event: " << command->input();
@@ -6044,6 +6256,7 @@ bool Session::InsertCharacter(commands::Command* command) {
       return EchoBackAndClearUndoContext(command);
     }
 
+    ClearPendingRerankedPreeditCommitAfterConvertCancel();
     context_->mutable_composer()->InsertCharacterKeyEvent(key);
     CommitCompositionDirectly(command);
     ClearUndoContext();  // UndoContext must be invalidated.
@@ -6058,12 +6271,27 @@ bool Session::InsertCharacter(commands::Command* command) {
   // that has not been shown to the user yet.
   if (live_conversion_pending_ &&
       CanDirectCommitPendingLiveConversionBeforeInsert(key)) {
+    const composer::Composer composer_before_insert = context_->composer();
     context_->mutable_composer()->InsertCharacterKeyEvent(key);
     ClearUndoContext();
 
     if (CanDirectCommitAfterPunctuation(key)) {
+      const auto [direct_commit_key, direct_commit_value] =
+          GetDirectCommitStringsWithDirectCommitSuffixFallback(
+              composer_before_insert, key);
+      const bool learned_reranked_preedit_after_cancel =
+          CommitPendingRerankedPreeditAfterConvertCancelForDirectCommit(
+              composer_before_insert, command->input().context(),
+              "convert_cancel_direct_commit_punctuation");
+      if (learned_reranked_preedit_after_cancel) {
+        ClearLiveConversionState();
+        CommitStringDirectly(direct_commit_key, direct_commit_value, command);
+        return true;
+      }
       return CommitPendingLiveConversionDisplayDirectly(command);
     }
+
+    ClearPendingRerankedPreeditCommitAfterConvertCancel();
 
     // The physical key looked like a direct-commit trigger before insertion,
     // but the romaji table may have turned it into a different character.
@@ -6102,6 +6330,7 @@ bool Session::InsertCharacter(commands::Command* command) {
   if ((live_conversion_active_ || live_conversion_pending_) &&
       ShouldCommitLiveConversionBeforeShiftAsciiInput(
           context_->GetConfig(), context_->composer(), key)) {
+    ClearPendingRerankedPreeditCommitAfterConvertCancel();
     if (had_visible_zenz_correction) {
       CommitZenzLiveCorrectionResult(command);
     } else if (live_conversion_active_) {
@@ -6134,6 +6363,7 @@ bool Session::InsertCharacter(commands::Command* command) {
 
   // Handle shortcut keys selecting a candidate from a list.
   if (MaybeSelectCandidate(command)) {
+    ClearPendingRerankedPreeditCommitAfterConvertCancel();
     Output(command);
     return true;
   }
@@ -6155,8 +6385,16 @@ bool Session::InsertCharacter(commands::Command* command) {
     CommitNotTriggeringZeroQuerySuggest(command);
     committed_conversion_before_insert = true;
 
+    // HandlePendingZenzFeedbackForKeyEvent() intentionally does not confirm
+    // feedback while the session is still in CONVERSION, because conversion
+    // keys may still be part of selecting the result.  An ordinary text input
+    // that reaches this point has already committed the current conversion, so
+    // it is now the next real text input after the zenz decision.
+    ConfirmPendingZenzFeedback();
+
     if (key.input_style() == commands::KeyEvent::DIRECT_INPUT) {
       // Do ClearUndoContext() because it is a direct input.
+      ClearPendingRerankedPreeditCommitAfterConvertCancel();
       ClearUndoContext();
       context_->mutable_composer()->InsertCharacterKeyEvent(key);
       CommitCompositionDirectly(command);
@@ -6164,6 +6402,7 @@ bool Session::InsertCharacter(commands::Command* command) {
     }
   }
 
+  const composer::Composer composer_before_insert = context_->composer();
   context_->mutable_composer()->InsertCharacterKeyEvent(key);
   ClearUndoContext();
 
@@ -6179,7 +6418,15 @@ bool Session::InsertCharacter(commands::Command* command) {
   }
 
   if (CanDirectCommitAfterPunctuation(key)) {
-    if (had_visible_zenz_correction) {
+    const auto [direct_commit_key, direct_commit_value] =
+        GetDirectCommitStringsWithDirectCommitSuffixFallback(
+            composer_before_insert, key);
+    const bool learned_reranked_preedit_after_cancel =
+        CommitPendingRerankedPreeditAfterConvertCancelForDirectCommit(
+            composer_before_insert, command->input().context(),
+            "convert_cancel_direct_commit_punctuation");
+
+    if (!learned_reranked_preedit_after_cancel && had_visible_zenz_correction) {
       const size_t length = context_->composer().GetLength();
       const std::string preedit = context_->composer().GetStringForPreedit();
       const std::string last_char(
@@ -6208,7 +6455,14 @@ bool Session::InsertCharacter(commands::Command* command) {
       return true;
     }
 
-    if (was_live_conversion && CommitLiveConversionResult(command)) {
+    if (!learned_reranked_preedit_after_cancel && was_live_conversion &&
+        CommitLiveConversionResult(command)) {
+      return true;
+    }
+
+    if (learned_reranked_preedit_after_cancel) {
+      ClearLiveConversionState();
+      CommitStringDirectly(direct_commit_key, direct_commit_value, command);
       return true;
     }
 
@@ -6221,6 +6475,8 @@ bool Session::InsertCharacter(commands::Command* command) {
     CommitCompositionDirectly(command);
     return true;
   }
+
+  ClearPendingRerankedPreeditCommitAfterConvertCancel();
 
   if (context_->mutable_composer()->ShouldCommit()) {
     CommitCompositionDirectly(command);
@@ -6418,6 +6674,8 @@ bool Session::EditCancel(commands::Command* command) {
       "edit_cancel_after_direct_commit_learning");
   DiscardPendingZenzFeedback("edit_cancel_after_pending_feedback");
 
+  ClearPendingRerankedPreeditCommitAfterConvertCancel();
+
   if (EditCancelOnPasswordField(command)) {
     return true;
   }
@@ -6436,6 +6694,8 @@ bool Session::EditCancelAndIMEOff(commands::Command* command) {
   DiscardPendingDirectCommitLearning(
       "edit_cancel_and_ime_off_after_direct_commit_learning");
   DiscardPendingZenzFeedback("edit_cancel_and_ime_off_after_pending_feedback");
+
+  ClearPendingRerankedPreeditCommitAfterConvertCancel();
 
   if (EditCancelOnPasswordField(command)) {
     return true;
@@ -6473,9 +6733,18 @@ bool Session::CommitInternal(commands::Command* command,
   PushUndoContext();
 
   if (context_->state() == ImeContext::COMPOSITION) {
-    context_->mutable_converter()->CommitPreedit(context_->composer(),
-                                                 command->input().context());
+    const bool mark_preedit_as_reranked =
+        ShouldMarkPreeditCommitAsRerankedAfterConvertCancel();
+    std::vector<std::string> segment_keys;
+    if (mark_preedit_as_reranked) {
+      segment_keys = pending_reranked_preedit_commit_segment_keys_;
+    }
+    ClearPendingRerankedPreeditCommitAfterConvertCancel();
+    context_->mutable_converter()->CommitPreedit(
+        context_->composer(), command->input().context(),
+        mark_preedit_as_reranked, segment_keys);
   } else {  // ImeContext::CONVERSION
+    ClearPendingRerankedPreeditCommitAfterConvertCancel();
     context_->mutable_converter()->Commit(context_->composer(),
                                           command->input().context());
   }
@@ -6705,6 +6974,102 @@ bool Session::Suggest(const commands::Input& input) {
 
   return context_->mutable_converter()->Suggest(context_->composer(),
                                                 input.context());
+}
+
+bool Session::AttachLiveConversionSuggestionCandidateWindow(
+    const commands::Input& input, commands::Output* output) {
+  DCHECK(output);
+
+  // Output() from live conversion may contain the real CONVERSION candidate
+  // window.  Only the passive SUGGESTION window built below is allowed to
+  // remain on live-conversion output; otherwise the renderer would show the
+  // ordinary conversion candidate list without an explicit Space/Down action.
+  live_conversion_suggestion_candidate_window_.Clear();
+  output->clear_candidate_window();
+
+  if (SuppressSuggestion(input)) {
+    return false;
+  }
+
+  // Live conversion intentionally keeps the real converter in CONVERSION state
+  // so that Space/Down can enter the normal conversion candidate list with a
+  // single key press.  EngineConverter::Suggest(), however, is defined only for
+  // COMPOSITION/SUGGESTION states and resets converter state while generating
+  // candidates.  Build the passive suggestion window on a cloned context and
+  // copy only candidate_window to the live-conversion output.  The real
+  // converter state, live_conversion_active_, selected segment, and Zenz state
+  // are left untouched.
+  ImeContext suggestion_context(*context_);
+  if (suggestion_context.converter().IsActive()) {
+    suggestion_context.mutable_converter()->Cancel();
+  }
+  suggestion_context.set_state(ImeContext::COMPOSITION);
+
+  bool has_suggestion = false;
+  if (input.has_request_suggestion() &&
+      input.type() == commands::Input::SEND_KEY) {
+    ConversionPreferences conversion_preferences =
+        suggestion_context.converter().conversion_preferences();
+    conversion_preferences.request_suggestion = input.request_suggestion();
+    has_suggestion =
+        suggestion_context.mutable_converter()->SuggestWithPreferences(
+            suggestion_context.composer(), input.context(),
+            conversion_preferences);
+  } else {
+    has_suggestion = suggestion_context.mutable_converter()->Suggest(
+        suggestion_context.composer(), input.context());
+  }
+
+  if (!has_suggestion) {
+    return false;
+  }
+
+  commands::Output suggestion_output;
+  suggestion_context.mutable_converter()->PopOutput(
+      suggestion_context.composer(), &suggestion_output);
+
+  if (!suggestion_output.has_candidate_window() ||
+      suggestion_output.candidate_window().candidate_size() == 0) {
+    return false;
+  }
+
+  live_conversion_suggestion_candidate_window_ =
+      suggestion_output.candidate_window();
+  *output->mutable_candidate_window() =
+      live_conversion_suggestion_candidate_window_;
+  return true;
+}
+
+bool Session::AttachCachedLiveConversionSuggestionCandidateWindow(
+    commands::Output* output) const {
+  DCHECK(output);
+
+  output->clear_candidate_window();
+
+  const commands::CandidateWindow* candidate_window = nullptr;
+  if (live_conversion_suggestion_candidate_window_.has_category() &&
+      live_conversion_suggestion_candidate_window_.category() ==
+          commands::SUGGESTION &&
+      live_conversion_suggestion_candidate_window_.candidate_size() > 0 &&
+      !live_conversion_suggestion_candidate_window_.has_focused_index()) {
+    candidate_window = &live_conversion_suggestion_candidate_window_;
+  } else if (
+      pending_live_conversion_suggestion_candidate_window_.has_category() &&
+      pending_live_conversion_suggestion_candidate_window_.category() ==
+          commands::SUGGESTION &&
+      pending_live_conversion_suggestion_candidate_window_.candidate_size() >
+          0 &&
+      !pending_live_conversion_suggestion_candidate_window_
+           .has_focused_index()) {
+    candidate_window = &pending_live_conversion_suggestion_candidate_window_;
+  }
+
+  if (candidate_window == nullptr) {
+    return false;
+  }
+
+  *output->mutable_candidate_window() = *candidate_window;
+  return true;
 }
 
 bool Session::ConvertToTransliteration(
@@ -7041,6 +7406,10 @@ bool Session::Convert(commands::Command* command) {
   CancelPendingLiveConversion();
   command->mutable_output()->set_consumed(true);
   const std::string composition = context_->composer().GetQueryForConversion();
+  const bool should_show_candidate_window_on_initial_conversion =
+      context_->state() == ImeContext::COMPOSITION &&
+      context_->GetConfig().show_candidate_window_on_initial_conversion() &&
+      !context_->GetConfig().use_live_conversion();
 
   // TODO(komatsu): Make a function like ConvertOrSpace.
   // Handle a space key on the ASCII composition mode.
@@ -7085,6 +7454,9 @@ bool Session::Convert(commands::Command* command) {
   }
 
   SetSessionState(ImeContext::CONVERSION, context_.get());
+  if (should_show_candidate_window_on_initial_conversion) {
+    context_->mutable_converter()->SetCandidateListVisible(true);
+  }
   Output(command);
   return true;
 }
@@ -7255,6 +7627,7 @@ bool Session::Delete(commands::Command* command) {
   DiscardPendingDirectCommitLearning(
       "delete_after_direct_commit_learning");
   DiscardPendingZenzFeedback("delete_after_pending_feedback");
+  ClearPendingRerankedPreeditCommitAfterConvertCancel();
 
   command->mutable_output()->set_consumed(true);
   CancelLiveConversionForEditing();
@@ -7277,6 +7650,7 @@ bool Session::Backspace(commands::Command* command) {
   DiscardPendingDirectCommitLearning(
       "backspace_after_direct_commit_learning");
   DiscardPendingZenzFeedback("backspace_after_pending_feedback");
+  ClearPendingRerankedPreeditCommitAfterConvertCancel();
 
   command->mutable_output()->set_consumed(true);
   CancelLiveConversionForEditing();
@@ -7400,11 +7774,52 @@ bool Session::ConvertCancel(commands::Command* command) {
 
   command->mutable_output()->set_consumed(true);
 
+  MaybeSetPendingRerankedPreeditCommitAfterConvertCancel();
+  ClearLiveConversionState();
+
   SetSessionState(ImeContext::COMPOSITION, context_.get());
   context_->mutable_converter()->Cancel();
   if (Suggest(command->input())) {
     Output(command);
   } else {
+    OutputComposition(command);
+  }
+  return true;
+}
+
+bool Session::PredictAndConvertFromLiveConversion(commands::Command* command) {
+  DCHECK(command);
+
+  CancelPendingLiveConversion();
+  command->mutable_output()->set_consumed(true);
+
+  if (context_->state() != ImeContext::CONVERSION || !live_conversion_active_) {
+    return PredictAndConvert(command);
+  }
+
+  // Selecting prediction candidates is an explicit user override of the
+  // currently visible live conversion result.  If a zenz correction is visible,
+  // remember it as rejected before removing the speculative layer.
+  if (HasVisibleZenzLiveCorrection()) {
+    SetPendingZenzFeedbackRejected("predict_after_zenz");
+  }
+  ClearZenzLiveCorrectionState();
+
+  // Passive suggestions shown during live conversion are generated from a cloned
+  // context and are not the real converter's current suggestion state.  Reset the
+  // real converter before entering prediction selection so stale previous
+  // suggestions from an older prefix, e.g. "ふ" before "ふる", are not reused.
+  ClearLiveConversionState();
+  SetSessionState(ImeContext::COMPOSITION, context_.get());
+  context_->mutable_converter()->Cancel();
+
+  if (context_->mutable_converter()->Predict(context_->composer())) {
+    SetSessionState(ImeContext::CONVERSION, context_.get());
+    Output(command);
+  } else {
+    // EngineConverter::Predict() resets its internal state on a first-prediction
+    // failure.  Keep Session and EngineConverter aligned and fall back to the
+    // same composition output that ordinary PredictAndConvert() uses on failure.
     OutputComposition(command);
   }
   return true;
@@ -7497,6 +7912,63 @@ bool MatchesString(absl::string_view value,
     }
   }
   return false;
+}
+
+std::string DirectCommitFallbackSuffixFromKeyEvent(
+    const commands::KeyEvent& key_event) {
+  if (MatchesString(key_event.key_string(),
+                    {"。", "｡", "．", "、", "､", "，", "？", "！",
+                     "（", "）", "「", "」", "［", "］"})) {
+    return key_event.key_string();
+  }
+
+  if (MatchesString(key_event.key_string(), {".", "．"})) {
+    return "。";
+  }
+  if (MatchesString(key_event.key_string(), {",", "，"})) {
+    return "、";
+  }
+  if (key_event.key_string() == "?") {
+    return "？";
+  }
+  if (key_event.key_string() == "!") {
+    return "！";
+  }
+  if (key_event.key_string() == "(") {
+    return "（";
+  }
+  if (key_event.key_string() == ")") {
+    return "）";
+  }
+  if (MatchesString(key_event.key_string(), {"[", "［"})) {
+    return "「";
+  }
+  if (MatchesString(key_event.key_string(), {"]", "］"})) {
+    return "」";
+  }
+
+  switch (key_event.key_code()) {
+    case static_cast<uint32_t>('.'):
+      return "。";
+    case static_cast<uint32_t>(','):
+      return "、";
+    case static_cast<uint32_t>('?'):
+      return "？";
+    case static_cast<uint32_t>('!'):
+      return "！";
+    case static_cast<uint32_t>('('):
+      return "（";
+    case static_cast<uint32_t>(')'):
+      return "）";
+    case static_cast<uint32_t>('['):
+      return "「";
+    case static_cast<uint32_t>(']'):
+      return "」";
+    default:
+      break;
+  }
+
+  return "";
 }
 
 // Auto conversion helper.
@@ -7597,6 +8069,34 @@ bool IsValidDirectCommitChar(const config::Config& config,
 }
 
 }  // namespace
+
+std::pair<std::string, std::string>
+Session::GetDirectCommitStringsWithDirectCommitSuffixFallback(
+    const composer::Composer& composer_before_insert,
+    const commands::KeyEvent& key) const {
+  const std::string key_before_insert =
+      composer_before_insert.GetQueryForConversion();
+  const std::string value_before_insert =
+      composer_before_insert.GetStringForSubmission();
+
+  std::string key_to_commit = context_->composer().GetQueryForConversion();
+  std::string value_to_commit = context_->composer().GetStringForSubmission();
+
+  // Some test and client paths provide the direct-commit trigger as the key
+  // event itself while leaving the restored preedit unchanged in Composer.
+  // In that case, explicitly append the trigger suffix so that the visible
+  // commit remains `きょう。`, while the strong learning target remains the
+  // suffix-free `きょう` captured before insertion.
+  if (value_to_commit == value_before_insert) {
+    const std::string suffix = DirectCommitFallbackSuffixFromKeyEvent(key);
+    if (!suffix.empty()) {
+      key_to_commit = absl::StrCat(key_before_insert, suffix);
+      value_to_commit = absl::StrCat(value_before_insert, suffix);
+    }
+  }
+
+  return {key_to_commit, value_to_commit};
+}
 
 bool Session::CanStartAutoConversion(
     const commands::KeyEvent& key_event) const {
